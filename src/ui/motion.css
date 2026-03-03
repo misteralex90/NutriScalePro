@@ -1,0 +1,356 @@
+/* ═══════════════════════════════════════════════════════════════
+   MOTION SPEC — NutriScale Pro
+   ───────────────────────────────────────────────────────────────
+   Single source of truth for ALL UI motion: Modal, Drawer,
+   Popover, Dropdown, Toast, Tooltip.
+
+   Style: bubble iOS-like — subtle scale + fade + micro translateY.
+   No aggressive bounces, no overshoot, no heavy shadows.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Tokens ─────────────────────────────────────────────────── */
+:root {
+  /* Durations */
+  --mo-dur-open:  220ms;
+  --mo-dur-close: 170ms;
+
+  /* Easing */
+  --mo-ease-open:  cubic-bezier(0.16, 1, 0.3, 1);   /* easeOutExpo-ish */
+  --mo-ease-close: cubic-bezier(0.4, 0, 0.7, 0.2);  /* easeIn            */
+
+  /* Transform — bubble pop */
+  --mo-scale-from: 0.97;
+  --mo-ty-from:    6px;
+
+  /* Backdrop */
+  --mo-backdrop-bg:   rgba(0, 0, 0, 0.25);
+  --mo-backdrop-blur:  12px;
+}
+
+
+/* ── Keyframes ──────────────────────────────────────────────── */
+
+/* Overlay (backdrop) */
+@keyframes mo-overlay-in {
+  from { opacity: 0 }
+  to   { opacity: 1 }
+}
+@keyframes mo-overlay-out {
+  from { opacity: 1 }
+  to   { opacity: 0 }
+}
+
+/* Bubble (modals — iOS 26 soap-bubble spring) */
+@keyframes mo-bubble-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.4) translateY(24px);
+    filter: blur(8px);
+  }
+  30% {
+    opacity: 1;
+    filter: blur(0px);
+  }
+  55% {
+    transform: scale(1.04) translateY(-4px);
+  }
+  72% {
+    transform: scale(0.985) translateY(1px);
+  }
+  86% {
+    transform: scale(1.008) translateY(0);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0px);
+  }
+}
+@keyframes mo-bubble-out {
+  0% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0px);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.88) translateY(12px);
+    filter: blur(4px);
+  }
+}
+
+/* Popover / Dropdown — iOS-like bubble, no overshoot */
+@keyframes mo-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+@keyframes mo-pop-out {
+  from {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.98) translateY(4px);
+  }
+}
+
+/* Dropdown item stagger — almost imperceptible cascade */
+@keyframes mo-item-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Toast — slide up from bottom */
+@keyframes mo-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes mo-toast-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+}
+
+/* Tooltip — micro fade+shift */
+@keyframes mo-tip-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes mo-tip-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(2px) scale(0.99);
+  }
+}
+
+/* Drawer — slide from right */
+@keyframes mo-drawer-in-right {
+  from { transform: translateX(100%) }
+  to   { transform: translateX(0)    }
+}
+@keyframes mo-drawer-out-right {
+  from { transform: translateX(0)    }
+  to   { transform: translateX(100%) }
+}
+/* Drawer — slide from left */
+@keyframes mo-drawer-in-left {
+  from { transform: translateX(-100%) }
+  to   { transform: translateX(0)     }
+}
+@keyframes mo-drawer-out-left {
+  from { transform: translateX(0)     }
+  to   { transform: translateX(-100%) }
+}
+
+/* Row expand (used in collapsible rows) */
+@keyframes mo-expand-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scaleY(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+  }
+}
+
+/* Page entrance — visible fade + lift */
+@keyframes mo-page-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Login card entrance — bubble pop, clearly visible */
+@keyframes mo-card-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.88) translateY(32px);
+    filter: blur(4px);
+  }
+  60% {
+    opacity: 1;
+    filter: blur(0px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0px);
+  }
+}
+
+
+/* ── Utility classes ────────────────────────────────────────── */
+
+/* Overlay */
+.mo-overlay-enter {
+  animation: mo-overlay-in 400ms var(--mo-ease-open) both;
+}
+.mo-overlay-exit {
+  animation: mo-overlay-out 280ms var(--mo-ease-close) both;
+}
+
+/* Bubble (modal panel — iOS spring) */
+.mo-bubble-enter {
+  animation: mo-bubble-in 560ms cubic-bezier(0.32, 0.72, 0, 1) both;
+  will-change: transform, opacity, filter;
+}
+.mo-bubble-exit {
+  animation: mo-bubble-out 260ms var(--mo-ease-close) both;
+  will-change: transform, opacity, filter;
+}
+
+/* Popover / Dropdown */
+.mo-pop-enter {
+  animation: mo-pop-in 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+.mo-pop-exit {
+  animation: mo-pop-out 160ms cubic-bezier(0.4, 0, 0.7, 0.2) both;
+  will-change: transform, opacity;
+}
+
+/* Dropdown items stagger */
+.mo-pop-enter [data-dropdown-item] {
+  opacity: 0;
+  animation: mo-item-in 160ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.mo-pop-enter [data-dropdown-item]:nth-child(1) { animation-delay: 20ms; }
+.mo-pop-enter [data-dropdown-item]:nth-child(2) { animation-delay: 35ms; }
+.mo-pop-enter [data-dropdown-item]:nth-child(3) { animation-delay: 50ms; }
+.mo-pop-enter [data-dropdown-item]:nth-child(4) { animation-delay: 65ms; }
+.mo-pop-enter [data-dropdown-item]:nth-child(5) { animation-delay: 80ms; }
+.mo-pop-enter [data-dropdown-item]:nth-child(6) { animation-delay: 95ms; }
+.mo-pop-enter [data-dropdown-item]:nth-child(7) { animation-delay: 110ms; }
+.mo-pop-enter [data-dropdown-item]:nth-child(8) { animation-delay: 125ms; }
+.mo-pop-enter [data-dropdown-item]:nth-child(9) { animation-delay: 140ms; }
+.mo-pop-enter [data-dropdown-item]:nth-child(10) { animation-delay: 155ms; }
+
+/* Toast */
+.mo-toast-enter {
+  animation: mo-toast-in var(--mo-dur-open) var(--mo-ease-open) both;
+  will-change: transform, opacity;
+}
+.mo-toast-exit {
+  animation: mo-toast-out var(--mo-dur-close) var(--mo-ease-close) both;
+  will-change: transform, opacity;
+}
+
+/* Tooltip */
+.mo-tip-enter {
+  animation: mo-tip-in 160ms var(--mo-ease-open) both;
+  will-change: transform, opacity;
+}
+.mo-tip-exit {
+  animation: mo-tip-out 120ms var(--mo-ease-close) both;
+  will-change: transform, opacity;
+}
+
+/* Drawer */
+.mo-drawer-enter-right {
+  animation: mo-drawer-in-right var(--mo-dur-open) var(--mo-ease-open) both;
+  will-change: transform;
+}
+.mo-drawer-exit-right {
+  animation: mo-drawer-out-right var(--mo-dur-close) var(--mo-ease-close) both;
+  will-change: transform;
+}
+.mo-drawer-enter-left {
+  animation: mo-drawer-in-left var(--mo-dur-open) var(--mo-ease-open) both;
+  will-change: transform;
+}
+.mo-drawer-exit-left {
+  animation: mo-drawer-out-left var(--mo-dur-close) var(--mo-ease-close) both;
+  will-change: transform;
+}
+
+/* Row expand */
+.mo-expand-enter {
+  animation: mo-expand-in var(--mo-dur-open) var(--mo-ease-open) both;
+  will-change: transform, opacity;
+}
+
+/* Page */
+.mo-page-enter {
+  animation: mo-page-in 380ms var(--mo-ease-open) both;
+}
+
+/* Login card — delayed so background lands first, then card pops */
+.mo-card-enter {
+  opacity: 0;
+  animation: mo-card-in 480ms var(--mo-ease-open) 100ms both;
+}
+
+
+/* ── Accessibility: prefers-reduced-motion ──────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  /* Allow simple opacity fades at a fast pace instead of nothing */
+  .mo-bubble-enter,
+  .mo-bubble-exit,
+  .mo-pop-enter,
+  .mo-pop-exit,
+  .mo-pop-enter [data-dropdown-item],
+  .mo-toast-enter,
+  .mo-toast-exit,
+  .mo-tip-enter,
+  .mo-tip-exit,
+  .mo-drawer-enter-right,
+  .mo-drawer-exit-right,
+  .mo-drawer-enter-left,
+  .mo-drawer-exit-left,
+  .mo-overlay-enter,
+  .mo-overlay-exit,
+  .mo-expand-enter,
+  .mo-page-enter,
+  .mo-card-enter {
+    animation: none !important;
+    /* Instant show/hide — handled by React phase */
+  }
+}
