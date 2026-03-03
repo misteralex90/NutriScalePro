@@ -162,13 +162,15 @@ const Landing = ({ onLogin, showLogin = false }) => {
       </button>
 
       {/* Signup CTA */}
-      <button
-        onClick={() => navigate('/signup')}
-        className="mt-3 inline-flex items-center gap-2 text-white/80 hover:text-white text-sm font-medium transition-colors duration-200"
-      >
-        <UserPlus size={16} />
-        Registrati come professionista
-      </button>
+      <div className="mt-4">
+        <button
+          onClick={() => navigate('/signup')}
+          className="inline-flex items-center gap-2 text-white/80 hover:text-white text-sm font-medium transition-colors duration-200"
+        >
+          <UserPlus size={16} />
+          Registrati come professionista
+        </button>
+      </div>
 
       {/* Features pills */}
       <div className="flex flex-wrap items-center justify-center gap-2 mt-8">
@@ -960,7 +962,13 @@ const NutritionistDashboard = ({ session, onLogout }) => {
       <div className="max-w-6xl mx-auto space-y-4">
         <div className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <img src={data.tenant.logoUrl || '/logo.png'} alt="Logo" className="w-14 h-14 rounded-xl object-cover border-2 border-cyan-200 shadow-sm" />
+            {data.tenant.logoUrl ? (
+              <img src={data.tenant.logoUrl} alt="Logo" className="w-14 h-14 rounded-xl object-cover border-2 border-cyan-200 shadow-sm" />
+            ) : (
+              <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 border-2 border-slate-300 border-dashed flex items-center justify-center">
+                <span className="text-slate-400 text-xs font-semibold">Logo</span>
+              </div>
+            )}
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-xl md:text-2xl font-black text-cyan-900">Dashboard di {data.tenant.displayName}</h1>
@@ -969,10 +977,7 @@ const NutritionistDashboard = ({ session, onLogout }) => {
               <p className="text-sm text-slate-500">NutriScale per Professionisti</p>
             </div>
           </div>
-          <div className="flex gap-2">
-            <button onClick={refresh} className={btnOutline}>Aggiorna</button>
-            <button onClick={onLogout} className={`${btnPrimary} flex items-center gap-1`}><LogOut size={14} /> Esci</button>
-          </div>
+          <button onClick={onLogout} className={`${btnPrimary} flex items-center gap-1`}><LogOut size={14} /> Esci</button>
         </div>
 
         {BETA_MODE && <BetaBanner />}
@@ -992,7 +997,14 @@ const NutritionistDashboard = ({ session, onLogout }) => {
         {activeSection === 'clients' && <div className="grid lg:grid-cols-2 gap-4">
           <Card title="Profilo pubblico" icon={<Users size={16} />}>
             <div className="space-y-3">
-              <img src={data.tenant.logoUrl || '/logo.png'} alt="Logo" className="h-20 w-20 rounded-2xl object-cover border-2 border-cyan-200 shadow-md" />
+              {data.tenant.logoUrl ? (
+                <img src={data.tenant.logoUrl} alt="Logo" className="h-20 w-20 rounded-2xl object-cover border-2 border-cyan-200 shadow-md" />
+              ) : (
+                <div className="h-20 w-20 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 border-2 border-slate-300 border-dashed flex flex-col items-center justify-center">
+                  <span className="text-slate-400 text-xs font-semibold">Il tuo</span>
+                  <span className="text-slate-400 text-xs font-semibold">Logo</span>
+                </div>
+              )}
               <input className={inputStyle} defaultValue={data.tenant.displayName} onBlur={(event) => {
                 const value = event.target.value.trim();
                 if (!isValidDoctorDisplayName(value)) {
@@ -1068,7 +1080,7 @@ const NutritionistDashboard = ({ session, onLogout }) => {
                     <Copy size={13} /> Copia
                   </button>
                 </div>
-                {!subscriptionActive && (
+                {!subscriptionActive && !BETA_MODE && (
                   <p className="text-[11px] text-amber-600 mt-2 flex items-center gap-1">
                     <Lock size={11} /> Il link sarà attivo dopo l'approvazione dell'abbonamento
                   </p>

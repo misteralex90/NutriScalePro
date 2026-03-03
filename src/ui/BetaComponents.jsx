@@ -54,17 +54,17 @@ export const BetaOverlay = ({ children, section, variant = 'default' }) => {
             {/* Titolo */}
             <div>
               <h3 className="text-2xl font-black text-slate-700">
-                In Sviluppo
+                Prossimamente
               </h3>
               <p className="text-sm text-slate-500 font-semibold mt-2">
-                Funzionalità in arrivo
+                Disponibile a breve
               </p>
             </div>
             
             {/* Messaggio */}
             <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
               <p className="text-sm text-slate-600 leading-relaxed">
-                Questa sezione è attualmente in fase di sviluppo e sarà disponibile nella versione completa di NutriScale Pro.
+                Questa sezione sarà disponibile nella versione completa di NutriScale Pro.
               </p>
             </div>
             
@@ -153,8 +153,8 @@ export const BetaBanner = () => {
             <BetaBadge />
           </div>
           <p className="text-sm text-white/90 leading-relaxed">
-            Grazie per essere tra i primi a testare NutriScale Pro. Le funzionalità principali sono attive e gratuite.
-            Alcune sezioni avanzate sono temporaneamente disabilitate e saranno disponibili nella versione completa.
+            Grazie per essere tra i primi a testare NutriScale Pro. Questa è una versione gratuita per testare
+            le funzionalità principali e raccogliere il tuo prezioso feedback.
           </p>
           <div className="mt-3 flex items-center gap-2 text-xs text-white/80">
             <MessageSquare size={14} />
