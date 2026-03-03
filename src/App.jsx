@@ -29,6 +29,8 @@ import {
 import { Modal, Select } from './ui';
 import NutritionistSignup from './ui/NutritionistSignup';
 import SubscriptionPaywall from './ui/SubscriptionPaywall';
+import { BetaBadge, BetaBanner, BetaOverlay } from './ui/BetaComponents';
+import { BETA_MODE } from './core/betaConfig';
 import { authApi, masterApi, nutritionistApi, publicApi, signupApi } from './core/api';
 import {
   ACCOUNT_STATUS,
@@ -957,9 +959,14 @@ const NutritionistDashboard = ({ session, onLogout }) => {
     <div className="min-h-screen bg-slate-50 p-4 md:p-6 mo-page-enter">
       <div className="max-w-6xl mx-auto space-y-4">
         <div className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center justify-between gap-3">
-          <div>
-            <h1 className="text-xl md:text-2xl font-black text-cyan-900">Dashboard Nutrizionista</h1>
-            <p className="text-sm text-slate-500">Tenant: {data.tenant.displayName}</p>
+          <div className="flex items-center gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl md:text-2xl font-black text-cyan-900">Dashboard Nutrizionista</h1>
+                {BETA_MODE && <BetaBadge />}
+              </div>
+              <p className="text-sm text-slate-500">Tenant: {data.tenant.displayName}</p>
+            </div>
           </div>
           <div className="flex gap-2">
             <button onClick={refresh} className={btnOutline}>Aggiorna</button>
@@ -967,7 +974,9 @@ const NutritionistDashboard = ({ session, onLogout }) => {
           </div>
         </div>
 
-        {needsSubscriptionAction && (
+        {BETA_MODE && <BetaBanner />}
+
+        {needsSubscriptionAction && !BETA_MODE && (
           <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-sm text-amber-900">
             <p className="font-semibold">Abbonamento non attivo</p>
             <p className="mt-1">Puoi comunque scegliere il piano e inviare la richiesta di pagamento dalla sezione “Richiedi abbonamento”.</p>
@@ -1122,8 +1131,9 @@ const NutritionistDashboard = ({ session, onLogout }) => {
             </div>
           </Card>
 
-          <Card title="Promozioni e referral" icon={<CircleDollarSign size={16} />}>
-            <div className="space-y-3 text-sm">
+          <BetaOverlay section="promotions">
+            <Card title="Promozioni e referral" icon={<CircleDollarSign size={16} />}>
+              <div className="space-y-3 text-sm">
               {data.promotions.slotsPromo?.active && (
                 <div className="border border-slate-200 rounded-xl p-3">
                   <p className="font-semibold">Promo porta un amico (slot limitati)</p>
@@ -1162,13 +1172,15 @@ const NutritionistDashboard = ({ session, onLogout }) => {
                   </div>
                 ))}
               </div>
-            </div>
-          </Card>
+              </div>
+            </Card>
+          </BetaOverlay>
         </div>}
 
         {activeSection === 'dashboard' && <>
         <div className="grid lg:grid-cols-2 gap-4">
-          <Card title="Abbonamento" icon={<Calendar size={16} />}>
+          <BetaOverlay section="subscription">
+            <Card title="Abbonamento" icon={<Calendar size={16} />}>
             <div className="space-y-2 text-sm">
               <p>Stato: {subscriptionActive ? <Badge variant="success">Attivo</Badge> : <Badge variant="danger">Non attivo</Badge>}</p>
               <p>Scadenza: <strong>{formatDate(data.subscription.endAt)}</strong></p>
@@ -1186,8 +1198,10 @@ const NutritionistDashboard = ({ session, onLogout }) => {
               )}
             </div>
           </Card>
+          </BetaOverlay>
 
-          <Card title="Richiedi abbonamento" icon={<Plus size={16} />}>
+          <BetaOverlay section="subscriptionRequest">
+            <Card title="Richiedi abbonamento" icon={<Plus size={16} />}>
             <div className="grid md:grid-cols-2 gap-2">
               <input className={inputStyle} placeholder="Nome" value={billing.firstName} onChange={(event) => setBilling((prev) => ({ ...prev, firstName: event.target.value }))} />
               <input className={inputStyle} placeholder="Cognome" value={billing.lastName} onChange={(event) => setBilling((prev) => ({ ...prev, lastName: event.target.value }))} />
@@ -1215,6 +1229,7 @@ const NutritionistDashboard = ({ session, onLogout }) => {
               }}>Invia richiesta</button>
             </div>
           </Card>
+          </BetaOverlay>
         </div>
 
         <div className="grid lg:grid-cols-3 gap-4">
@@ -1242,7 +1257,12 @@ const NutritionistDashboard = ({ session, onLogout }) => {
             </div>
           </Card>
 
-          <Card title="Feedback e suggerimenti" icon={<Megaphone size={16} />}>
+          <Card title={BETA_MODE ? "🌟 Feedback e suggerimenti" : "Feedback e suggerimenti"} icon={<Megaphone size={16} />}>
+            {BETA_MODE && (
+              <div className="mb-3 p-3 bg-gradient-to-r from-emerald-50 to-cyan-50 rounded-xl border border-emerald-200">
+                <p className="text-xs text-slate-700 font-semibold">Il tuo feedback è prezioso per migliorare NutriScale Pro!</p>
+              </div>
+            )}
             <div className="space-y-2">
               <input
                 className={inputStyle}
