@@ -142,14 +142,14 @@ const Landing = ({ onLogin, showLogin = false }) => {
     <div className="relative z-10 text-center max-w-lg w-full mo-card-enter">
       {/* Brand */}
       <div className="mb-2">
-        <span className="text-emerald-300 text-sm font-semibold tracking-widest uppercase">Piattaforma Nutrizionisti</span>
+        <span className="text-emerald-300 text-sm font-semibold tracking-widest uppercase">Per Professionisti della Nutrizione</span>
       </div>
       <h1 className="text-5xl md:text-6xl font-black text-white tracking-tight leading-none">
         Nutri<span className="text-emerald-300">Scale</span><span className="text-white/60 font-light"> Pro</span>
       </h1>
       <p className="text-white/70 mt-4 text-base md:text-lg leading-relaxed">
-        Conversione peso alimenti da crudo a cotto e viceversa,<br className="hidden md:block" />
-        per i professionisti della nutrizione.
+        Lo strumento professionale per calcolare con precisione<br className="hidden md:block" />
+        le conversioni tra peso crudo e cotto degli alimenti.
       </p>
 
       {/* Main CTA */}
@@ -158,7 +158,7 @@ const Landing = ({ onLogin, showLogin = false }) => {
         className="mt-10 group relative inline-flex items-center gap-3 bg-white text-cyan-900 font-bold text-lg px-10 py-4 rounded-2xl shadow-xl shadow-black/20 hover:shadow-2xl hover:shadow-black/30 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
       >
         <LogIn size={22} className="text-cyan-700" />
-        Accedi come Nutrizionista
+        Accedi alla tua area
       </button>
 
       {/* Signup CTA */}
@@ -167,12 +167,12 @@ const Landing = ({ onLogin, showLogin = false }) => {
         className="mt-3 inline-flex items-center gap-2 text-white/80 hover:text-white text-sm font-medium transition-colors duration-200"
       >
         <UserPlus size={16} />
-        Iscriviti come nutrizionista
+        Registrati come professionista
       </button>
 
       {/* Features pills */}
       <div className="flex flex-wrap items-center justify-center gap-2 mt-8">
-        {['Conversione Crudo ↔ Cotto', 'Database Alimenti', 'Link Pazienti'].map((f) => (
+        {['Calcolo Crudo-Cotto', 'Database Completo', 'Condivisione con Pazienti', 'Profilo Personalizzato'].map((f) => (
           <span key={f} className="text-xs bg-white/10 text-white/80 px-3 py-1.5 rounded-full backdrop-blur">{f}</span>
         ))}
       </div>
@@ -195,7 +195,7 @@ const Landing = ({ onLogin, showLogin = false }) => {
         <h1 className="text-2xl font-black text-cyan-900 text-center">
           Nutri<span className="text-emerald-600">Scale</span> <span className="text-cyan-900/50 font-light">Pro</span>
         </h1>
-        <p className="text-sm text-slate-500 mt-1 text-center">Accedi alla tua area nutrizionista</p>
+        <p className="text-sm text-slate-500 mt-1 text-center">Accedi alla tua area professionale</p>
         <div className="space-y-3 mt-6">
           <input data-autofocus value={email} onChange={(e) => setEmail(e.target.value)} className={inputStyle} placeholder="Email" type="email" required />
           <input value={password} onChange={(e) => setPassword(e.target.value)} className={inputStyle} placeholder="Password" type="password" required />
