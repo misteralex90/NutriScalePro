@@ -29,6 +29,16 @@ const commit = (state) => {
 
 const getTenant = (state, tenantId) => state.tenants.find((tenant) => tenant.id === tenantId);
 const getSubscriptionByTenant = (state, tenantId) => state.subscriptions.find((sub) => sub.tenantId === tenantId);
+const getUserByTenant = (state, tenantId) => state.users.find((user) => user.tenantId === tenantId);
+
+const normalizeGlobalPaymentLinks = (links = []) =>
+  links
+    .map((item) => ({
+      id: item.id ?? uid('paylink'),
+      label: (item.label ?? '').trim(),
+      url: (item.url ?? '').trim(),
+    }))
+    .filter((item) => item.label && item.url);
 
 const getPromotion = (state, type) => state.promotions.find((promo) => promo.type === type && promo.active);
 
@@ -195,6 +205,8 @@ export const signupApi = {
       displayName,
       logoUrl: '/logo.png',
       logoFilename: 'logo.png',
+      patientAccessCode: '',
+      patientWelcomeMessage: 'Benvenuto! Inserisci il codice fornito dal tuo nutrizionista per accedere al calcolatore.',
       isBlocked: false,
       accountStatus: ACCOUNT_STATUS.TRIAL_ACTIVE,
       createdAt: nowIso(),
@@ -257,6 +269,15 @@ export const masterApi = {
     const pendingSignups = nutritionists.filter((n) => n.accountStatus === ACCOUNT_STATUS.PENDING_APPROVAL);
     const pendingRequests = state.subscriptionRequests.filter((request) => request.status === REQUEST_STATUS.PENDING);
     const masterNotifications = state.notifications.filter((n) => n.tenantId === '__master');
+    const feedbacks = (state.feedbacks ?? []).map((item) => {
+      const tenant = getTenant(state, item.tenantId);
+      const user = getUserByTenant(state, item.tenantId);
+      return {
+        ...item,
+        nutritionistName: tenant?.displayName ?? 'Nutrizionista',
+        nutritionistEmail: user?.email ?? 'n/d',
+      };
+    });
 
     return {
       nutritionists,
@@ -265,9 +286,27 @@ export const masterApi = {
       pendingRequests,
       announcements: state.announcements,
       referrals: state.referrals,
+      globalPaymentLinks: state.globalPaymentLinks ?? [],
+      feedbacks,
       masterNotifications,
       auditLog: state.auditLog ?? [],
     };
+  },
+
+  setGlobalPaymentLinks: (session, links) => {
+    assertRole(session, [ROLES.MASTER]);
+    const normalized = normalizeGlobalPaymentLinks(links);
+
+    for (const item of normalized) {
+      const isHttp = /^https?:\/\//i.test(item.url);
+      if (!isHttp) {
+        throw new Error('Ogni link pagamento deve iniziare con http:// o https://');
+      }
+    }
+
+    const state = getState();
+    commit({ ...state, globalPaymentLinks: normalized });
+    return { ok: true };
   },
 
   approveSignup: (session, tenantId) => {
@@ -441,6 +480,8 @@ export const masterApi = {
       displayName: input.displayName,
       logoUrl: '/logo.png',
       logoFilename: 'logo.png',
+      patientAccessCode: '',
+      patientWelcomeMessage: 'Benvenuto! Inserisci il codice fornito dal tuo nutrizionista per accedere al calcolatore.',
       isBlocked: false,
       accountStatus: ACCOUNT_STATUS.ACTIVE,
       createdAt: nowIso(),
@@ -463,7 +504,7 @@ export const masterApi = {
       status: 'pending',
       startAt,
       endAt,
-      renewalUrl: input.renewalUrl ?? '',
+      renewalUrl: '',
       updatedAt: new Date().toISOString(),
     };
 
@@ -715,12 +756,43 @@ export const nutritionistApi = {
       referrals,
       notifications,
       promotions: { slotsPromo, freeMonthPromo },
+      globalPaymentLinks: state.globalPaymentLinks ?? [],
       publicUrl: `${window.location.origin}/n/${tenant.slug}`,
       currentPrices: {
         month1: resolvePlanPrice(state, PLAN.MONTH_1),
         month12: resolvePlanPrice(state, PLAN.MONTH_12),
       },
     };
+  },
+
+  updatePatientAccessSettings: (session, { accessCode, welcomeMessage }) => {
+    assertRole(session, [ROLES.NUTRITIONIST]);
+    let state = getState();
+
+    const normalizedCode = (accessCode ?? '').trim();
+    const normalizedWelcome = (welcomeMessage ?? '').trim();
+
+    if (normalizedCode && normalizedCode.length < 4) {
+      throw new Error('Il codice paziente deve avere almeno 4 caratteri.');
+    }
+
+    state = {
+      ...state,
+      tenants: state.tenants.map((tenant) =>
+        tenant.id === session.tenantId
+          ? {
+              ...tenant,
+              patientAccessCode: normalizedCode,
+              patientWelcomeMessage:
+                normalizedWelcome ||
+                'Benvenuto! Inserisci il codice fornito dal tuo nutrizionista per accedere al calcolatore.',
+            }
+          : tenant
+      ),
+    };
+
+    commit(state);
+    return { ok: true };
   },
 
   updateBranding: (session, { displayName, logo }) => {
@@ -801,7 +873,6 @@ export const nutritionistApi = {
       plan: payload.plan,
       status: REQUEST_STATUS.PENDING,
       billing: payload.billing,
-      paymentLink: payload.paymentLink ?? '',
       notes: payload.notes ?? '',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -809,6 +880,44 @@ export const nutritionistApi = {
 
     commit({ ...state, subscriptionRequests: [request, ...state.subscriptionRequests] });
     return request;
+  },
+
+  submitFeedback: (session, payload) => {
+    assertRole(session, [ROLES.NUTRITIONIST]);
+    const subject = (payload?.subject ?? '').trim();
+    const body = (payload?.body ?? '').trim();
+    if (!subject || !body) {
+      throw new Error('Inserisci oggetto e descrizione del feedback.');
+    }
+
+    const state = getState();
+    const feedback = {
+      id: uid('fb'),
+      tenantId: session.tenantId,
+      subject,
+      body,
+      createdAt: nowIso(),
+      status: 'open',
+    };
+
+    commit({
+      ...state,
+      feedbacks: [feedback, ...(state.feedbacks ?? [])],
+      notifications: [
+        {
+          id: uid('notif'),
+          tenantId: '__master',
+          title: 'Nuovo feedback nutrizionista',
+          body: subject,
+          read: false,
+          createdAt: nowIso(),
+          metaKey: `feedback-${feedback.id}`,
+        },
+        ...state.notifications,
+      ],
+    });
+
+    return feedback;
   },
 
   markNotificationRead: (session, notificationId) => {
@@ -843,10 +952,26 @@ export const publicApi = {
     return {
       tenant: { displayName: tenant.displayName, slug: tenant.slug, logoUrl: tenant.logoUrl },
       isAccessActive: active,
+      requiresPatientCode: Boolean(tenant.patientAccessCode),
+      patientWelcomeMessage:
+        tenant.patientWelcomeMessage ||
+        'Benvenuto! Inserisci il codice fornito dal tuo nutrizionista per accedere al calcolatore.',
+      globalPaymentLinks: state.globalPaymentLinks ?? [],
       foodDatabase: state.foodDatabase,
       renewalUrl: subscription?.renewalUrl ?? '',
       blockReason: '',
     };
+  },
+
+  verifyPatientAccessCode: (slug, code) => {
+    const state = getState();
+    const tenant = state.tenants.find((item) => item.slug === slug);
+    if (!tenant) throw new Error('Nutrizionista non trovato');
+    if (!tenant.patientAccessCode) return { ok: true };
+    if ((code ?? '').trim() !== tenant.patientAccessCode) {
+      throw new Error('Codice di accesso non valido.');
+    }
+    return { ok: true };
   },
 };
 

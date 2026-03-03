@@ -97,14 +97,20 @@ export default function SubscriptionPaywall({ onSubmit, plans, defaultPlan }) {
             <span>Fattura elettronica</span>
           </label>
           {error && <div className="bg-red-50 text-red-500 p-2 rounded text-sm mb-2">{error}</div>}
-          <button className="w-full py-3 bg-cyan-900 text-white rounded font-bold mt-2" onClick={handleNext}>Continua</button>
+          <div className="flex gap-2 mt-2">
+            <button className="w-1/2 py-3 border border-slate-300 text-slate-600 rounded font-bold" onClick={() => setStep(1)}>Indietro</button>
+            <button className="w-1/2 py-3 bg-cyan-900 text-white rounded font-bold" onClick={handleNext}>Continua</button>
+          </div>
         </div>
       )}
       {step === 3 && (
         <div>
           <h3 className="font-semibold mb-2">Pagamento</h3>
-          <p className="mb-4">Segui le istruzioni per il pagamento che riceverai via email o tramite il link fornito dal master.</p>
-          <button className="w-full py-3 bg-emerald-700 text-white rounded font-bold mt-2" onClick={handleSubmit}>Conferma richiesta abbonamento</button>
+          <p className="mb-4">Conferma la richiesta: l'amministratore vedrà i dati di fatturazione e il tuo eventuale link/istruzioni di pagamento.</p>
+          <div className="flex gap-2 mt-2">
+            <button className="w-1/2 py-3 border border-slate-300 text-slate-600 rounded font-bold" onClick={() => setStep(2)}>Indietro</button>
+            <button className="w-1/2 py-3 bg-emerald-700 text-white rounded font-bold" onClick={handleSubmit}>Conferma richiesta</button>
+          </div>
         </div>
       )}
     </div>

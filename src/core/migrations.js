@@ -42,6 +42,8 @@ export const seedState = () => {
         displayName: 'Dott. Mario Rossi',
         logoUrl: '/logo.png',
         logoFilename: 'logo.png',
+        patientAccessCode: '',
+        patientWelcomeMessage: 'Benvenuto! Inserisci il codice fornito dal tuo nutrizionista per accedere al calcolatore.',
         isBlocked: false,
         accountStatus: ACCOUNT_STATUS.ACTIVE,
         createdAt,
@@ -76,6 +78,7 @@ export const seedState = () => {
         createdAt,
       },
     ],
+    globalPaymentLinks: [],
     referrals: [
       {
         id: uid('ref'),
@@ -90,8 +93,8 @@ export const seedState = () => {
     announcements: [
       {
         id: uid('msg'),
-        title: 'Benvenuto in NutriScale SaaS',
-        body: 'Da oggi puoi condividere il tuo link pubblico personale ai pazienti.',
+        title: 'Benvenuto in NutriScale Pro',
+        body: 'Da qui puoi gestire il tuo profilo professionale e condividere il link del calcolatore con i tuoi pazienti.',
         active: true,
         createdAt,
       },
@@ -113,13 +116,13 @@ export const seedState = () => {
           pecEmail: '',
           sdiCode: '',
         },
-        paymentLink: '',
         notes: 'Richiesta upgrade annuale',
         createdAt,
         updatedAt: createdAt,
       },
     ],
     notifications: [],
+    feedbacks: [],
     emailOutbox: [],
     auditLog: [],
     signupRateLimit: {},
@@ -143,16 +146,36 @@ export const migrateState = (state) => {
   const tenants = (state.tenants ?? seeded.tenants).map((t) => ({
     ...t,
     accountStatus: t.accountStatus ?? ACCOUNT_STATUS.ACTIVE,
+    patientAccessCode: t.patientAccessCode ?? '',
+    patientWelcomeMessage:
+      t.patientWelcomeMessage ??
+      'Benvenuto! Inserisci il codice fornito dal tuo nutrizionista per accedere al calcolatore.',
   }));
+
+  const announcements = (state.announcements ?? seeded.announcements).map((msg) => {
+    if (msg?.title === 'Benvenuto in NutriScale SaaS') {
+      return {
+        ...msg,
+        title: 'Benvenuto in NutriScale Pro',
+        body: 'Da qui puoi gestire il tuo profilo professionale e condividere il link del calcolatore con i tuoi pazienti.',
+      };
+    }
+    return msg;
+  });
 
   return {
     ...seeded,
     ...state,
     users,
     tenants,
+    announcements,
     version: SCHEMA_VERSION,
     foodDatabase: state.foodDatabase?.length ? state.foodDatabase : seeded.foodDatabase,
     publicRateLimit: state.publicRateLimit ?? {},
+    feedbacks: state.feedbacks ?? [],
+    globalPaymentLinks: Array.isArray(state.globalPaymentLinks)
+      ? state.globalPaymentLinks
+      : seeded.globalPaymentLinks,
     emailOutbox: state.emailOutbox ?? [],
     auditLog: state.auditLog ?? [],
     signupRateLimit: state.signupRateLimit ?? {},

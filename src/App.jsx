@@ -211,6 +211,9 @@ const PublicConverter = ({ slug }) => {
   const [weight, setWeight] = useState(100);
   const [rawToCooked, setRawToCooked] = useState(true);
   const [query, setQuery] = useState('');
+  const [codeInput, setCodeInput] = useState('');
+  const [accessError, setAccessError] = useState('');
+  const [isUnlocked, setIsUnlocked] = useState(false);
 
   useEffect(() => {
     try {
@@ -221,6 +224,13 @@ const PublicConverter = ({ slug }) => {
     }
   }, [slug]);
 
+  useEffect(() => {
+    if (!state.payload) return;
+    setIsUnlocked(!state.payload.requiresPatientCode);
+    setCodeInput('');
+    setAccessError('');
+  }, [state.payload]);
+
   const filtered = useMemo(() => {
     if (!state.payload?.foodDatabase) return [];
     return state.payload.foodDatabase.filter((item) => item.name.toLowerCase().includes(query.toLowerCase()));
@@ -229,7 +239,7 @@ const PublicConverter = ({ slug }) => {
   if (state.loading) return <div className="min-h-screen bg-slate-50 p-8">Caricamento...</div>;
   if (state.error) return <div className="min-h-screen bg-slate-50 p-8 text-red-600">{state.error}</div>;
 
-  const { tenant, isAccessActive, renewalUrl, blockReason } = state.payload;
+  const { tenant, isAccessActive, renewalUrl, blockReason, requiresPatientCode, patientWelcomeMessage, globalPaymentLinks = [] } = state.payload;
 
   if (!isAccessActive) {
     return (
@@ -238,13 +248,59 @@ const PublicConverter = ({ slug }) => {
           <Lock className="mx-auto text-red-500" />
           <h1 className="text-xl font-bold mt-2">Accesso non attivo</h1>
           <p className="text-sm text-slate-500 mt-2">Il servizio del nutrizionista è {blockReason === 'bloccato' ? 'temporaneamente bloccato' : 'scaduto'}.</p>
-          {renewalUrl ? (
+          {globalPaymentLinks.length > 0 ? (
+            <div className="mt-4 space-y-2 text-left">
+              <p className="text-xs font-semibold text-slate-500">Link pagamento disponibili</p>
+              {globalPaymentLinks.map((item) => (
+                <a key={item.id} href={item.url} className="inline-flex items-center gap-2 text-cyan-800 text-sm font-semibold" target="_blank" rel="noreferrer">
+                  {item.label} <ExternalLink size={13} />
+                </a>
+              ))}
+            </div>
+          ) : renewalUrl ? (
             <a href={renewalUrl} className="inline-flex items-center gap-2 mt-5 px-4 py-2 rounded-xl bg-cyan-900 text-white" target="_blank" rel="noreferrer">
               Rinnova <ExternalLink size={14} />
             </a>
           ) : (
             <p className="text-sm mt-4">Contatta il tuo nutrizionista per il rinnovo.</p>
           )}
+        </div>
+      </div>
+    );
+  }
+
+  if (requiresPatientCode && !isUnlocked) {
+    return (
+      <div className="min-h-screen bg-slate-50 p-6 flex items-center justify-center mo-page-enter">
+        <div className="max-w-md w-full bg-white border border-slate-200 rounded-2xl p-6 text-center">
+          <img src={tenant.logoUrl || '/logo.png'} alt="Logo" className="w-14 h-14 mx-auto rounded-full border border-slate-200 bg-white object-cover" />
+          <h1 className="text-xl font-black text-cyan-900 mt-3">{tenant.displayName}</h1>
+          <p className="text-sm text-slate-500 mt-2">{patientWelcomeMessage}</p>
+
+          <form
+            className="mt-5 space-y-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              try {
+                publicApi.verifyPatientAccessCode(slug, codeInput);
+                setIsUnlocked(true);
+                setAccessError('');
+              } catch (err) {
+                setAccessError(err.message);
+              }
+            }}
+          >
+            <input
+              className={inputStyle}
+              type="password"
+              value={codeInput}
+              onChange={(event) => setCodeInput(event.target.value)}
+              placeholder="Inserisci codice accesso"
+              required
+            />
+            {accessError && <p className="text-xs text-red-600">{accessError}</p>}
+            <button className="w-full py-2.5 rounded-xl bg-cyan-900 text-white font-semibold">Entra nel calcolatore</button>
+          </form>
         </div>
       </div>
     );
@@ -312,12 +368,13 @@ const NutritionistRow = ({ user, tenant, subscription, accountStatus, session, r
     [ACCOUNT_STATUS.EXPIRED]: 'danger',
     [ACCOUNT_STATUS.SUSPENDED]: 'danger',
     [ACCOUNT_STATUS.REJECTED]: 'danger',
+    [ACCOUNT_STATUS.PAYMENT_REQUIRED]: 'warning',
   };
   const statusLabel = ACCOUNT_STATUS_LABELS[accountStatus] ?? accountStatus;
   const statusVariant = statusVariantMap[accountStatus] ?? 'default';
   const isActive = accountStatus === ACCOUNT_STATUS.ACTIVE;
   const isPending = accountStatus === ACCOUNT_STATUS.PENDING_APPROVAL;
-  const canActivate = [ACCOUNT_STATUS.APPROVED_NO_SUBSCRIPTION, ACCOUNT_STATUS.EXPIRED, ACCOUNT_STATUS.SUSPENDED].includes(accountStatus);
+  const canActivate = [ACCOUNT_STATUS.APPROVED_NO_SUBSCRIPTION, ACCOUNT_STATUS.EXPIRED, ACCOUNT_STATUS.SUSPENDED, ACCOUNT_STATUS.PAYMENT_REQUIRED].includes(accountStatus);
 
   return (
     <div className={`border rounded-2xl overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${expanded ? 'border-cyan-300 shadow-lg shadow-cyan-100/50 bg-white' : 'border-slate-200 bg-slate-50/80 hover:border-slate-300 hover:shadow-sm'}`}>
@@ -410,6 +467,7 @@ const NutritionistRow = ({ user, tenant, subscription, accountStatus, session, r
             <button className={`${btnSmDanger} inline-flex items-center gap-1`} onClick={async () => {
               if (await showConfirm('Eliminare nutrizionista?')) { masterApi.deleteNutritionist(session, tenant.id); refresh(); }
             }}><Trash2 size={13} /> Elimina</button>
+
           </div>
         </div>
       )}
@@ -425,8 +483,8 @@ const MasterDashboard = ({ session, onLogout }) => {
     email: '',
     password: '',
     plan: PLAN.TRIAL_14,
-    renewalUrl: '',
   });
+  const [paymentLinkDraft, setPaymentLinkDraft] = useState({ label: '', url: '' });
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   // Fix: define subscriptionActive for Paywall section (avoid crash)
@@ -493,7 +551,7 @@ const MasterDashboard = ({ session, onLogout }) => {
                 if (!(await showConfirm(`Creare nutrizionista ${createForm.displayName}?`))) return;
                 try {
                   masterApi.createNutritionist(session, createForm);
-                  setCreateForm({ displayName: 'Dott. Nome Cognome', email: '', password: '', plan: PLAN.TRIAL_14, renewalUrl: '' });
+                  setCreateForm({ displayName: 'Dott. Nome Cognome', email: '', password: '', plan: PLAN.TRIAL_14 });
                   refresh();
                 } catch (createError) {
                   setError(createError.message);
@@ -578,6 +636,63 @@ const MasterDashboard = ({ session, onLogout }) => {
             </div>
           </Card>
 
+          <Card title="Link pagamento globali" icon={<ExternalLink size={16} />}>
+            <div className="space-y-2">
+              <div className="grid md:grid-cols-2 gap-2">
+                <input
+                  className={inputStyle}
+                  placeholder="Etichetta (es. Stripe 1 mese)"
+                  value={paymentLinkDraft.label}
+                  onChange={(event) => setPaymentLinkDraft((prev) => ({ ...prev, label: event.target.value }))}
+                />
+                <input
+                  className={inputStyle}
+                  placeholder="https://..."
+                  value={paymentLinkDraft.url}
+                  onChange={(event) => setPaymentLinkDraft((prev) => ({ ...prev, url: event.target.value }))}
+                />
+              </div>
+              <button
+                className={btnPrimary}
+                onClick={() => {
+                  const next = [...(data.globalPaymentLinks ?? [])];
+                  next.push({ id: `pay-${Date.now()}`, label: paymentLinkDraft.label.trim(), url: paymentLinkDraft.url.trim() });
+                  try {
+                    masterApi.setGlobalPaymentLinks(session, next);
+                    setPaymentLinkDraft({ label: '', url: '' });
+                    refresh();
+                  } catch (err) {
+                    setError(err.message);
+                  }
+                }}
+              >
+                Aggiungi link globale
+              </button>
+
+              <div className="space-y-1 max-h-40 overflow-auto pr-1">
+                {(data.globalPaymentLinks ?? []).length === 0 && <p className="text-sm text-slate-500">Nessun link globale configurato.</p>}
+                {(data.globalPaymentLinks ?? []).map((item) => (
+                  <div key={item.id} className="border border-slate-200 rounded-lg p-2 flex items-center justify-between gap-2">
+                    <a href={item.url} target="_blank" rel="noreferrer" className="text-xs text-cyan-800 font-semibold truncate">{item.label}</a>
+                    <button
+                      className={btnSmDanger}
+                      onClick={() => {
+                        try {
+                          masterApi.setGlobalPaymentLinks(session, (data.globalPaymentLinks ?? []).filter((link) => link.id !== item.id));
+                          refresh();
+                        } catch (err) {
+                          setError(err.message);
+                        }
+                      }}
+                    >
+                      Rimuovi
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Card>
+
           <Card title="Comunicazioni" icon={<Megaphone size={16} />}>
             <div className="space-y-2">
               <input className={inputStyle} placeholder="Titolo" value={announcement.title} onChange={(event) => setAnnouncement((prev) => ({ ...prev, title: event.target.value }))} />
@@ -650,19 +765,37 @@ const MasterDashboard = ({ session, onLogout }) => {
               ))}
             </div>
           </Card>
+
+          <Card title="Feedback nutrizionisti" icon={<Megaphone size={16} />}>
+            <div className="space-y-2 max-h-56 overflow-auto">
+              {(data.feedbacks ?? []).length === 0 && <p className="text-sm text-slate-500">Nessun feedback ricevuto.</p>}
+              {(data.feedbacks ?? []).map((item) => (
+                <article key={item.id} className="border border-slate-200 rounded-xl p-3">
+                  <h4 className="font-semibold text-sm">{item.subject}</h4>
+                  <p className="text-xs text-slate-500 mt-1">{item.nutritionistName} · {item.nutritionistEmail}</p>
+                  <p className="text-xs text-slate-600 mt-2">{item.body}</p>
+                  <p className="text-[11px] text-slate-400 mt-2">{formatDate(item.createdAt)}</p>
+                </article>
+              ))}
+            </div>
+          </Card>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-4">
+        <div className="grid md:grid-cols-1 gap-4">
           <Card title="Paywall" icon={<Plus size={16} />}>
             <div className="space-y-2 max-h-80 overflow-auto pr-1">
               <p>Stato: {subscriptionActive ? <Badge variant="success">Attivo</Badge> : <Badge variant="danger">Non attivo</Badge>}</p>
               <p>Scadenza: <strong>{data.subscription && data.subscription.endAt ? formatDate(data.subscription.endAt) : '—'}</strong></p>
               <p>Prezzi correnti: 1 mese <strong>{data.currentPrices?.month1 ?? '—'}€</strong> · 12 mesi <strong>{data.currentPrices?.month12 ?? '—'}€</strong></p>
-              {data.subscription && data.subscription.renewalUrl ? (
-                <a href={data.subscription.renewalUrl} target="_blank" rel="noreferrer" className="inline-flex mt-1 items-center gap-2 text-cyan-700 font-semibold">Rinnova <ExternalLink size={14} /></a>
-              ) : (
-                <p className="text-slate-500">Il link rinnovo sarà configurato dal MASTER.</p>
-              )}
+              {(data.globalPaymentLinks ?? []).length > 0 ? (
+                <div className="space-y-1">
+                  {(data.globalPaymentLinks ?? []).map((item) => (
+                    <a key={item.id} href={item.url} target="_blank" rel="noreferrer" className="inline-flex mt-1 items-center gap-2 text-cyan-700 font-semibold">
+                      {item.label} <ExternalLink size={14} />
+                    </a>
+                  ))}
+                </div>
+              ) : <p className="text-slate-500">Nessun link pagamento globale configurato dal MASTER.</p>}
               <div className="mt-6">
                 <SubscriptionPaywall
                   plans={[
@@ -683,19 +816,6 @@ const MasterDashboard = ({ session, onLogout }) => {
               </div>
             </div>
           </Card>
-
-          <Card title="Comunicazioni" icon={<Megaphone size={16} />}>
-            <div className="space-y-2">
-              <input className={inputStyle} placeholder="Titolo" value={announcement.title} onChange={(event) => setAnnouncement((prev) => ({ ...prev, title: event.target.value }))} />
-              <textarea className={inputStyle} rows={3} placeholder="Messaggio" value={announcement.body} onChange={(event) => setAnnouncement((prev) => ({ ...prev, body: event.target.value }))} />
-              <button className={btnPrimary} onClick={async () => {
-                if (!announcement.title || !announcement.body) return;
-                masterApi.createAnnouncement(session, announcement);
-                setAnnouncement({ title: '', body: '' });
-                refresh();
-              }}>Invia comunicazione</button>
-            </div>
-          </Card>
         </div>
 
         {message && <p className="text-sm text-emerald-700">{message}</p>}
@@ -709,6 +829,11 @@ const NutritionistDashboard = ({ session, onLogout }) => {
   const [data, setData] = useState(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [activeSection, setActiveSection] = useState('clients');
+  const [clientAccessCode, setClientAccessCode] = useState('');
+  const [clientWelcomeMessage, setClientWelcomeMessage] = useState('');
+  const [feedbackSubject, setFeedbackSubject] = useState('');
+  const [feedbackBody, setFeedbackBody] = useState('');
   const [billing, setBilling] = useState({
     firstName: '',
     lastName: '',
@@ -721,7 +846,6 @@ const NutritionistDashboard = ({ session, onLogout }) => {
     sdiCode: '',
   });
   const [requestPlan, setRequestPlan] = useState(PLAN.MONTH_1);
-  const [paymentLink, setPaymentLink] = useState('');
   const [referral, setReferral] = useState({ firstName: '', lastName: '', email: '' });
   const [notes, setNotes] = useState('');
 
@@ -738,6 +862,12 @@ const NutritionistDashboard = ({ session, onLogout }) => {
     refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    if (!data?.tenant) return;
+    setClientAccessCode(data.tenant.patientAccessCode ?? '');
+    setClientWelcomeMessage(data.tenant.patientWelcomeMessage ?? '');
+  }, [data?.tenant?.id, data?.tenant?.patientAccessCode, data?.tenant?.patientWelcomeMessage]);
+
   if (!data) {
     return <div className="p-8">{error || 'Caricamento dashboard...'}</div>;
   }
@@ -749,29 +879,27 @@ const NutritionistDashboard = ({ session, onLogout }) => {
 
   // ...existing code...
 
-  // Fix: wrap conditional fragments in a parent <div>
-  // (Replace the problematic fragment rendering)
-  /* ── Feature gate: non-ACTIVE accounts see a restricted view ── */
-  if (data.accountStatus !== ACCOUNT_STATUS.ACTIVE) {
+  const blockedStatuses = [ACCOUNT_STATUS.SUSPENDED, ACCOUNT_STATUS.REJECTED, ACCOUNT_STATUS.PENDING_APPROVAL];
+
+  if (blockedStatuses.includes(data.accountStatus)) {
     const gateConfig = {
-      [ACCOUNT_STATUS.APPROVED_NO_SUBSCRIPTION]: {
-        icon: <Clock size={32} className="text-amber-500" />,
-        title: 'Account approvato',
-        desc: 'Il tuo account è stato approvato! In attesa dell\'attivazione dell\'abbonamento da parte dell\'amministratore.',
-        color: 'amber',
-      },
-      [ACCOUNT_STATUS.EXPIRED]: {
-        icon: <Calendar size={32} className="text-red-500" />,
-        title: 'Abbonamento scaduto',
-        desc: 'Il tuo abbonamento è scaduto. Contatta l\'amministratore o invia una richiesta di rinnovo.',
-        color: 'red',
-        showSubscriptionRequest: true,
-      },
       [ACCOUNT_STATUS.SUSPENDED]: {
         icon: <Lock size={32} className="text-red-500" />,
         title: 'Account sospeso',
         desc: 'Il tuo account è stato temporaneamente sospeso dall\'amministratore. Contatta il supporto.',
         color: 'red',
+      },
+      [ACCOUNT_STATUS.REJECTED]: {
+        icon: <XCircle size={32} className="text-red-500" />,
+        title: 'Iscrizione rifiutata',
+        desc: 'La richiesta di accesso è stata rifiutata. Contatta l\'amministratore per maggiori informazioni.',
+        color: 'red',
+      },
+      [ACCOUNT_STATUS.PENDING_APPROVAL]: {
+        icon: <Clock size={32} className="text-amber-500" />,
+        title: 'In attesa di approvazione',
+        desc: 'Il tuo account è in revisione. Potrai usare la dashboard dopo l\'approvazione.',
+        color: 'amber',
       },
     };
     const gate = gateConfig[data.accountStatus] ?? {
@@ -823,6 +951,7 @@ const NutritionistDashboard = ({ session, onLogout }) => {
   const visibleSlots = data.promotions.slotsPromo?.slotsVisible ?? 10;
   const maxSlots = data.promotions.slotsPromo?.maxDiscountedUsers ?? 20;
   const usedSlots = data.promotions.slotsPromo?.discountedJoinedCount ?? 0;
+  const needsSubscriptionAction = [ACCOUNT_STATUS.APPROVED_NO_SUBSCRIPTION, ACCOUNT_STATUS.EXPIRED, ACCOUNT_STATUS.PAYMENT_REQUIRED].includes(data.accountStatus);
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-6 mo-page-enter">
@@ -838,7 +967,19 @@ const NutritionistDashboard = ({ session, onLogout }) => {
           </div>
         </div>
 
-        <div className="grid lg:grid-cols-2 gap-4">
+        {needsSubscriptionAction && (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-sm text-amber-900">
+            <p className="font-semibold">Abbonamento non attivo</p>
+            <p className="mt-1">Puoi comunque scegliere il piano e inviare la richiesta di pagamento dalla sezione “Richiedi abbonamento”.</p>
+          </div>
+        )}
+
+        <div className="bg-white border border-slate-200 rounded-2xl p-2 inline-flex gap-2 w-fit">
+          <button className={`${activeSection === 'clients' ? btnPrimary : btnOutline}`} onClick={() => setActiveSection('clients')}>Gestione clienti</button>
+          <button className={`${activeSection === 'dashboard' ? btnPrimary : btnOutline}`} onClick={() => setActiveSection('dashboard')}>Dashboard operativa</button>
+        </div>
+
+        {activeSection === 'clients' && <div className="grid lg:grid-cols-2 gap-4">
           <Card title="Profilo pubblico" icon={<Users size={16} />}>
             <div className="space-y-3">
               <img src={data.tenant.logoUrl || '/logo.png'} alt="Logo" className="h-16 w-16 rounded-xl object-cover border border-slate-200" />
@@ -922,25 +1063,65 @@ const NutritionistDashboard = ({ session, onLogout }) => {
                     <Lock size={11} /> Il link sarà attivo dopo l'approvazione dell'abbonamento
                   </p>
                 )}
+
+                <div className="mt-4 border-t border-slate-200 pt-3 space-y-2">
+                  <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Codice di accesso per pazienti (opzionale)</p>
+                  <input
+                    className={inputStyle}
+                    type="password"
+                    value={clientAccessCode}
+                    onChange={(event) => setClientAccessCode(event.target.value)}
+                    placeholder="Imposta codice accesso pazienti (min 4 caratteri)"
+                  />
+                  <textarea
+                    className={inputStyle}
+                    rows={2}
+                    value={clientWelcomeMessage}
+                    onChange={(event) => setClientWelcomeMessage(event.target.value)}
+                    placeholder="Messaggio di benvenuto pagina accesso"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      className={btnPrimary}
+                      onClick={() => {
+                        try {
+                          nutritionistApi.updatePatientAccessSettings(session, {
+                            accessCode: clientAccessCode,
+                            welcomeMessage: clientWelcomeMessage,
+                          });
+                          setMessage('Impostazioni accesso pazienti salvate');
+                          refresh();
+                        } catch (settingsError) {
+                          setError(settingsError.message);
+                        }
+                      }}
+                    >
+                      Salva accesso
+                    </button>
+                    <button
+                      className={btnOutline}
+                      onClick={() => {
+                        try {
+                          nutritionistApi.updatePatientAccessSettings(session, {
+                            accessCode: '',
+                            welcomeMessage: clientWelcomeMessage,
+                          });
+                          setClientAccessCode('');
+                          setMessage('Accesso diretto ripristinato (senza codice)');
+                          refresh();
+                        } catch (settingsError) {
+                          setError(settingsError.message);
+                        }
+                      }}
+                    >
+                      Disattiva codice
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </Card>
 
-          <Card title="Abbonamento" icon={<Calendar size={16} />}>
-            <div className="space-y-2 text-sm">
-              <p>Stato: {subscriptionActive ? <Badge variant="success">Attivo</Badge> : <Badge variant="danger">Non attivo</Badge>}</p>
-              <p>Scadenza: <strong>{formatDate(data.subscription.endAt)}</strong></p>
-              <p>Prezzi correnti: 1 mese <strong>{data.currentPrices.month1}€</strong> · 12 mesi <strong>{data.currentPrices.month12}€</strong></p>
-              {data.subscription.renewalUrl ? (
-                <a href={data.subscription.renewalUrl} target="_blank" rel="noreferrer" className="inline-flex mt-1 items-center gap-2 text-cyan-700 font-semibold">Rinnova <ExternalLink size={14} /></a>
-              ) : (
-                <p className="text-slate-500">Il link rinnovo sarà configurato dal MASTER.</p>
-              )}
-            </div>
-          </Card>
-        </div>
-
-        <div className="grid lg:grid-cols-2 gap-4">
           <Card title="Promozioni e referral" icon={<CircleDollarSign size={16} />}>
             <div className="space-y-3 text-sm">
               {data.promotions.slotsPromo?.active && (
@@ -983,6 +1164,28 @@ const NutritionistDashboard = ({ session, onLogout }) => {
               </div>
             </div>
           </Card>
+        </div>}
+
+        {activeSection === 'dashboard' && <>
+        <div className="grid lg:grid-cols-2 gap-4">
+          <Card title="Abbonamento" icon={<Calendar size={16} />}>
+            <div className="space-y-2 text-sm">
+              <p>Stato: {subscriptionActive ? <Badge variant="success">Attivo</Badge> : <Badge variant="danger">Non attivo</Badge>}</p>
+              <p>Scadenza: <strong>{formatDate(data.subscription.endAt)}</strong></p>
+              <p>Prezzi correnti: 1 mese <strong>{data.currentPrices.month1}€</strong> · 12 mesi <strong>{data.currentPrices.month12}€</strong></p>
+              {(data.globalPaymentLinks ?? []).length > 0 ? (
+                <div className="space-y-1">
+                  {(data.globalPaymentLinks ?? []).map((item) => (
+                    <a key={item.id} href={item.url} target="_blank" rel="noreferrer" className="inline-flex mt-1 items-center gap-2 text-cyan-700 font-semibold">
+                      {item.label} <ExternalLink size={14} />
+                    </a>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-slate-500">Nessun link pagamento globale configurato dal MASTER.</p>
+              )}
+            </div>
+          </Card>
 
           <Card title="Richiedi abbonamento" icon={<Plus size={16} />}>
             <div className="grid md:grid-cols-2 gap-2">
@@ -1000,11 +1203,10 @@ const NutritionistDashboard = ({ session, onLogout }) => {
                 value={requestPlan}
                 onChange={(val) => setRequestPlan(val)}
               />
-              <input className={`${inputStyle} md:col-span-2`} placeholder="Link pagamento / istruzioni" value={paymentLink} onChange={(event) => setPaymentLink(event.target.value)} />
               <textarea className={`${inputStyle} md:col-span-2`} rows={2} placeholder="Note" value={notes} onChange={(event) => setNotes(event.target.value)} />
               <button className={`${btnPrimary} py-2.5 md:col-span-2`} onClick={() => {
                 try {
-                  nutritionistApi.submitSubscriptionRequest(session, { plan: requestPlan, billing, paymentLink, notes });
+                  nutritionistApi.submitSubscriptionRequest(session, { plan: requestPlan, billing, notes });
                   setMessage('Richiesta inviata');
                   refresh();
                 } catch (requestError) {
@@ -1015,7 +1217,7 @@ const NutritionistDashboard = ({ session, onLogout }) => {
           </Card>
         </div>
 
-        <div className="grid lg:grid-cols-2 gap-4">
+        <div className="grid lg:grid-cols-3 gap-4">
           <Card title="Notifiche" icon={<Bell size={16} />}>
             <div className="space-y-2 max-h-56 overflow-auto">
               {data.notifications.length === 0 && <p className="text-sm text-slate-500">Nessuna notifica.</p>}
@@ -1039,7 +1241,42 @@ const NutritionistDashboard = ({ session, onLogout }) => {
               ))}
             </div>
           </Card>
+
+          <Card title="Feedback e suggerimenti" icon={<Megaphone size={16} />}>
+            <div className="space-y-2">
+              <input
+                className={inputStyle}
+                placeholder="Oggetto"
+                value={feedbackSubject}
+                onChange={(event) => setFeedbackSubject(event.target.value)}
+              />
+              <textarea
+                className={inputStyle}
+                rows={4}
+                placeholder="Descrivi la miglioria che vorresti"
+                value={feedbackBody}
+                onChange={(event) => setFeedbackBody(event.target.value)}
+              />
+              <button
+                className={btnPrimary}
+                onClick={() => {
+                  try {
+                    nutritionistApi.submitFeedback(session, { subject: feedbackSubject, body: feedbackBody });
+                    setFeedbackSubject('');
+                    setFeedbackBody('');
+                    setMessage('Feedback inviato con successo');
+                    refresh();
+                  } catch (feedbackError) {
+                    setError(feedbackError.message);
+                  }
+                }}
+              >
+                Invia feedback
+              </button>
+            </div>
+          </Card>
         </div>
+        </>}
 
         {message && <p className="text-sm text-emerald-700">{message}</p>}
         {error && <p className="text-sm text-red-700">{error}</p>}
