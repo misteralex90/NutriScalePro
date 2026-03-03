@@ -32,6 +32,55 @@ export const BetaOverlay = ({ children, section, variant = 'default' }) => {
     return children;
   }
   
+  // Variante speciale per dashboard operativa completa
+  if (section === 'operativeDashboard') {
+    return (
+      <div className="relative min-h-[400px]">
+        {/* Contenuto offuscato */}
+        <div className="pointer-events-none select-none absolute inset-0" style={{ filter: 'blur(12px)', opacity: 0.2 }}>
+          {children}
+        </div>
+        
+        {/* Overlay con messaggio work in progress */}
+        <div className="absolute inset-0 flex items-center justify-center p-6">
+          <div className="max-w-lg text-center space-y-4 mo-card-enter">
+            {/* Icona */}
+            <div className="flex justify-center">
+              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-slate-400 to-slate-600 flex items-center justify-center shadow-xl shadow-slate-300/50">
+                <Lock size={40} className="text-white" />
+              </div>
+            </div>
+            
+            {/* Titolo */}
+            <div>
+              <h3 className="text-2xl font-black text-slate-700">
+                In Sviluppo
+              </h3>
+              <p className="text-sm text-slate-500 font-semibold mt-2">
+                Funzionalità in arrivo
+              </p>
+            </div>
+            
+            {/* Messaggio */}
+            <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
+              <p className="text-sm text-slate-600 leading-relaxed">
+                Questa sezione è attualmente in fase di sviluppo e sarà disponibile nella versione completa di NutriScale Pro.
+              </p>
+            </div>
+            
+            {/* Badge Beta */}
+            <div className="flex justify-center">
+              <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold bg-slate-100 text-slate-600">
+                <Sparkles size={14} />
+                Beta - Work in Progress
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
   return (
     <div className="relative">
       {/* Contenuto offuscato */}

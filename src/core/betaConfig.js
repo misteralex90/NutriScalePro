@@ -32,6 +32,7 @@ La versione completa con tutte le funzionalità avanzate sarà disponibile a bre
     subscriptionRequest: true, // Richiesta abbonamento
     referrals: true,          // Sistema referral
     promotions: true,         // Promozioni
+    operativeDashboard: true, // Intera dashboard operativa
   },
   
   // Badge Beta da mostrare

@@ -178,12 +178,12 @@ const Landing = ({ onLogin, showLogin = false }) => {
       </div>
     </div>
 
-    {/* Hidden master link */}
+    {/* Hidden admin link */}
     <button
       onClick={() => navigate('/master/login')}
       className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/30 hover:text-white/60 text-[11px] transition-colors duration-300 tracking-wide"
     >
-      •&nbsp;&nbsp;Admin&nbsp;&nbsp;•
+      •&nbsp;&nbsp;Gestione&nbsp;&nbsp;•
     </button>
 
     {/* Login modal overlay — no page change */}
@@ -275,7 +275,7 @@ const PublicConverter = ({ slug }) => {
     return (
       <div className="min-h-screen bg-slate-50 p-6 flex items-center justify-center mo-page-enter">
         <div className="max-w-md w-full bg-white border border-slate-200 rounded-2xl p-6 text-center">
-          <img src={tenant.logoUrl || '/logo.png'} alt="Logo" className="w-14 h-14 mx-auto rounded-full border border-slate-200 bg-white object-cover" />
+          <img src={tenant.logoUrl || '/logo.png'} alt="Logo" className="w-20 h-20 mx-auto rounded-2xl border-2 border-slate-200 bg-white object-cover shadow-md" />
           <h1 className="text-xl font-black text-cyan-900 mt-3">{tenant.displayName}</h1>
           <p className="text-sm text-slate-500 mt-2">{patientWelcomeMessage}</p>
 
@@ -515,7 +515,7 @@ const MasterDashboard = ({ session, onLogout }) => {
   }, [refresh]);
 
   if (!data) {
-    return <div className="p-8">{error || 'Caricamento dashboard MASTER...'}</div>;
+    return <div className="p-8">{error || 'Caricamento dashboard amministrazione...'}</div>;
   }
 
   // Fix: fallback to empty array if undefined
@@ -529,7 +529,7 @@ const MasterDashboard = ({ session, onLogout }) => {
     <div className="min-h-screen bg-slate-50 p-4 md:p-6 mo-page-enter">
       <div className="max-w-6xl mx-auto space-y-4">
         <div className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center justify-between gap-3">
-          <h1 className="text-xl md:text-2xl font-black text-cyan-900 flex items-center gap-2"><Shield size={20} /> Dashboard MASTER</h1>
+          <h1 className="text-xl md:text-2xl font-black text-cyan-900 flex items-center gap-2"><Shield size={20} /> Amministrazione Piattaforma</h1>
           <div className="flex gap-2">
             <button onClick={refresh} className={btnOutline}>Aggiorna</button>
             <button onClick={onLogout} className={`${btnPrimary} flex items-center gap-1`}><LogOut size={14} /> Esci</button>
@@ -757,7 +757,7 @@ const MasterDashboard = ({ session, onLogout }) => {
             </div>
           </Card>
 
-          <Card title="Comunicazioni MASTER" icon={<Megaphone size={16} />}>
+          <Card title="Comunicazioni" icon={<Megaphone size={16} />}>
             <div className="space-y-2 max-h-56 overflow-auto">
               {data.announcements.map((messageItem) => (
                 <article key={messageItem.id} className="border border-slate-200 rounded-xl p-3">
@@ -960,12 +960,13 @@ const NutritionistDashboard = ({ session, onLogout }) => {
       <div className="max-w-6xl mx-auto space-y-4">
         <div className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
+            <img src={data.tenant.logoUrl || '/logo.png'} alt="Logo" className="w-14 h-14 rounded-xl object-cover border-2 border-cyan-200 shadow-sm" />
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-xl md:text-2xl font-black text-cyan-900">Dashboard Nutrizionista</h1>
+                <h1 className="text-xl md:text-2xl font-black text-cyan-900">Dashboard di {data.tenant.displayName}</h1>
                 {BETA_MODE && <BetaBadge />}
               </div>
-              <p className="text-sm text-slate-500">Tenant: {data.tenant.displayName}</p>
+              <p className="text-sm text-slate-500">NutriScale per Professionisti</p>
             </div>
           </div>
           <div className="flex gap-2">
@@ -991,7 +992,7 @@ const NutritionistDashboard = ({ session, onLogout }) => {
         {activeSection === 'clients' && <div className="grid lg:grid-cols-2 gap-4">
           <Card title="Profilo pubblico" icon={<Users size={16} />}>
             <div className="space-y-3">
-              <img src={data.tenant.logoUrl || '/logo.png'} alt="Logo" className="h-16 w-16 rounded-xl object-cover border border-slate-200" />
+              <img src={data.tenant.logoUrl || '/logo.png'} alt="Logo" className="h-20 w-20 rounded-2xl object-cover border-2 border-cyan-200 shadow-md" />
               <input className={inputStyle} defaultValue={data.tenant.displayName} onBlur={(event) => {
                 const value = event.target.value.trim();
                 if (!isValidDoctorDisplayName(value)) {
@@ -1131,6 +1132,49 @@ const NutritionistDashboard = ({ session, onLogout }) => {
             </div>
           </Card>
 
+          <Card title={BETA_MODE ? "🌟 Feedback e suggerimenti" : "Feedback e suggerimenti"} icon={<Megaphone size={16} />}>
+            {BETA_MODE && (
+              <div className="mb-3 p-3 bg-gradient-to-r from-emerald-50 to-cyan-50 rounded-xl border border-emerald-200">
+                <p className="text-xs text-slate-700 font-semibold">Il tuo feedback è prezioso per migliorare NutriScale Pro!</p>
+              </div>
+            )}
+            <div className="space-y-2">
+              <input
+                className={inputStyle}
+                placeholder="Oggetto"
+                value={feedbackSubject}
+                onChange={(event) => setFeedbackSubject(event.target.value)}
+              />
+              <textarea
+                className={inputStyle}
+                rows={4}
+                placeholder="Descrivi la miglioria che vorresti"
+                value={feedbackBody}
+                onChange={(event) => setFeedbackBody(event.target.value)}
+              />
+              <button
+                className={btnPrimary}
+                onClick={() => {
+                  try {
+                    nutritionistApi.submitFeedback(session, { subject: feedbackSubject, body: feedbackBody });
+                    setFeedbackSubject('');
+                    setFeedbackBody('');
+                    setMessage('Feedback inviato con successo');
+                    refresh();
+                  } catch (feedbackError) {
+                    setError(feedbackError.message);
+                  }
+                }}
+              >
+                Invia feedback
+              </button>
+            </div>
+          </Card>
+        </div>}
+
+        {activeSection === 'dashboard' && <BetaOverlay section="operativeDashboard">
+        <div className="space-y-4">
+        <div className="grid lg:grid-cols-2 gap-4">
           <BetaOverlay section="promotions">
             <Card title="Promozioni e referral" icon={<CircleDollarSign size={16} />}>
               <div className="space-y-3 text-sm">
@@ -1175,9 +1219,10 @@ const NutritionistDashboard = ({ session, onLogout }) => {
               </div>
             </Card>
           </BetaOverlay>
-        </div>}
 
-        {activeSection === 'dashboard' && <>
+          <div></div>
+        </div>
+
         <div className="grid lg:grid-cols-2 gap-4">
           <BetaOverlay section="subscription">
             <Card title="Abbonamento" icon={<Calendar size={16} />}>
@@ -1246,57 +1291,11 @@ const NutritionistDashboard = ({ session, onLogout }) => {
             </div>
           </Card>
 
-          <Card title="Comunicazioni MASTER" icon={<Megaphone size={16} />}>
-            <div className="space-y-2 max-h-56 overflow-auto">
-              {data.announcements.map((messageItem) => (
-                <article key={messageItem.id} className="border border-slate-200 rounded-xl p-3">
-                  <h4 className="font-semibold text-sm">{messageItem.title}</h4>
-                  <p className="text-xs text-slate-600 mt-1">{messageItem.body}</p>
-                </article>
-              ))}
-            </div>
-          </Card>
-
-          <Card title={BETA_MODE ? "🌟 Feedback e suggerimenti" : "Feedback e suggerimenti"} icon={<Megaphone size={16} />}>
-            {BETA_MODE && (
-              <div className="mb-3 p-3 bg-gradient-to-r from-emerald-50 to-cyan-50 rounded-xl border border-emerald-200">
-                <p className="text-xs text-slate-700 font-semibold">Il tuo feedback è prezioso per migliorare NutriScale Pro!</p>
-              </div>
-            )}
-            <div className="space-y-2">
-              <input
-                className={inputStyle}
-                placeholder="Oggetto"
-                value={feedbackSubject}
-                onChange={(event) => setFeedbackSubject(event.target.value)}
-              />
-              <textarea
-                className={inputStyle}
-                rows={4}
-                placeholder="Descrivi la miglioria che vorresti"
-                value={feedbackBody}
-                onChange={(event) => setFeedbackBody(event.target.value)}
-              />
-              <button
-                className={btnPrimary}
-                onClick={() => {
-                  try {
-                    nutritionistApi.submitFeedback(session, { subject: feedbackSubject, body: feedbackBody });
-                    setFeedbackSubject('');
-                    setFeedbackBody('');
-                    setMessage('Feedback inviato con successo');
-                    refresh();
-                  } catch (feedbackError) {
-                    setError(feedbackError.message);
-                  }
-                }}
-              >
-                Invia feedback
-              </button>
-            </div>
-          </Card>
+          <div></div>
+          <div></div>
         </div>
-        </>}
+        </div>
+        </BetaOverlay>}
 
         {message && <p className="text-sm text-emerald-700">{message}</p>}
         {error && <p className="text-sm text-red-700">{error}</p>}
