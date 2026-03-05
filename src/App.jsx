@@ -284,14 +284,22 @@ const PublicConverter = ({ slug }) => {
       </header>
       <main className="max-w-3xl mx-auto p-4 md:p-6 space-y-4">
         <Card title="Convertitore Crudo/Cotto" icon={<RefreshCw size={17} />}>
-          <div className="grid md:grid-cols-3 gap-3">
-            <input type="number" min="0" value={weight} onChange={(event) => setWeight(Number(event.target.value || 0))} className={inputStyle} />
+          <div className="text-center mb-3">
+            <h3 className="text-lg md:text-xl font-black text-cyan-900">Convertitore Crudo/Cotto</h3>
+          </div>
+          <div className="grid md:grid-cols-3 gap-3 items-center">
+            <div className="flex items-center gap-2 justify-center md:justify-start">
+              <input
+                type="number"
+                min="0"
+                value={weight}
+                onChange={(event) => setWeight(Number(event.target.value || 0))}
+                className="w-full max-w-[180px] px-4 py-3 rounded-2xl border border-cyan-300 bg-cyan-50/60 text-cyan-900 font-bold text-lg focus:border-cyan-600 focus:ring-2 focus:ring-cyan-100 outline-none"
+              />
+              <span className="text-sm font-semibold text-cyan-800">grammi</span>
+            </div>
             <button onClick={() => setRawToCooked(true)} className={`rounded-xl py-2.5 font-semibold border ${rawToCooked ? 'bg-cyan-900 text-white border-cyan-900' : 'bg-white border-slate-300'}`}>Crudo → Cotto</button>
             <button onClick={() => setRawToCooked(false)} className={`rounded-xl py-2.5 font-semibold border ${!rawToCooked ? 'bg-cyan-900 text-white border-cyan-900' : 'bg-white border-slate-300'}`}>Cotto → Crudo</button>
-          </div>
-          <div className="mt-4 rounded-2xl border border-cyan-200 bg-gradient-to-r from-cyan-50 to-emerald-50 p-4 text-center">
-            <p className="text-xs uppercase tracking-wider text-cyan-700 font-semibold">Quantita di riferimento</p>
-            <p className="text-3xl font-black text-cyan-900 leading-none mt-1">{weight} <span className="text-base font-semibold text-cyan-700">grammi</span></p>
           </div>
           <div className="mt-3 relative">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
