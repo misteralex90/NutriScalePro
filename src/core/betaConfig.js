@@ -44,4 +44,7 @@ La versione completa con tutte le funzionalità avanzate sarà disponibile a bre
   
   // Data di scadenza della beta (opzionale)
   expiryDate: null, // Esempio: '2026-04-30'
+
+  // Durata del periodo di prova in giorni (calcolato dalla data di registrazione del nutrizionista)
+  trialDays: 14,
 };

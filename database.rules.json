@@ -1,0 +1,28 @@
+{
+  "rules": {
+    "tenants": {
+      "$slug": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "foodDatabase": {
+      ".read": true,
+      ".write": true
+    },
+    "auth": {
+      "$emailKey": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "tenantFull": {
+      "$tenantId": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    ".read": false,
+    ".write": false
+  }
+}

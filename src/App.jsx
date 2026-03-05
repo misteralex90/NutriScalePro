@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  ArrowLeft,
   Bell,
   Building2,
   Calendar,
@@ -16,6 +17,7 @@ import {
   LogIn,
   LogOut,
   Megaphone,
+  MessageSquare,
   Plus,
   RefreshCw,
   Search,
@@ -32,6 +34,7 @@ import SubscriptionPaywall from './ui/SubscriptionPaywall';
 import { BetaBadge, BetaBanner, BetaOverlay } from './ui/BetaComponents';
 import { BETA_MODE } from './core/betaConfig';
 import { authApi, masterApi, nutritionistApi, publicApi, signupApi } from './core/api';
+import { fetchTenantPublic } from './core/publicStore';
 import {
   ACCOUNT_STATUS,
   ACCOUNT_STATUS_LABELS,
@@ -122,10 +125,11 @@ const Landing = ({ onLogin, showLogin = false }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
-  const submitLogin = (e) => {
+  const submitLogin = async (e) => {
     e.preventDefault();
+    setError('');
     try {
-      const session = authApi.loginNutritionist({ email, password });
+      const session = await authApi.loginNutritionist({ email, password });
       onLogin(session);
     } catch (err) {
       setError(err.message);
@@ -142,14 +146,14 @@ const Landing = ({ onLogin, showLogin = false }) => {
     <div className="relative z-10 text-center max-w-lg w-full mo-card-enter">
       {/* Brand */}
       <div className="mb-2">
-        <span className="text-emerald-300 text-sm font-semibold tracking-widest uppercase">Per Professionisti della Nutrizione</span>
+        <span className="text-emerald-300 text-sm font-semibold tracking-widest uppercase">Piattaforma Nutrizionisti</span>
       </div>
       <h1 className="text-5xl md:text-6xl font-black text-white tracking-tight leading-none">
         Nutri<span className="text-emerald-300">Scale</span><span className="text-white/60 font-light"> Pro</span>
       </h1>
       <p className="text-white/70 mt-4 text-base md:text-lg leading-relaxed">
-        Lo strumento professionale per calcolare con precisione<br className="hidden md:block" />
-        le conversioni tra peso crudo e cotto degli alimenti.
+        Conversione peso alimenti da crudo a cotto e viceversa,<br className="hidden md:block" />
+        per i professionisti della nutrizione.
       </p>
 
       {/* Main CTA */}
@@ -158,34 +162,32 @@ const Landing = ({ onLogin, showLogin = false }) => {
         className="mt-10 group relative inline-flex items-center gap-3 bg-white text-cyan-900 font-bold text-lg px-10 py-4 rounded-2xl shadow-xl shadow-black/20 hover:shadow-2xl hover:shadow-black/30 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
       >
         <LogIn size={22} className="text-cyan-700" />
-        Accedi alla tua area
+        Accedi come Nutrizionista
       </button>
 
       {/* Signup CTA */}
-      <div className="mt-4">
-        <button
-          onClick={() => navigate('/signup')}
-          className="inline-flex items-center gap-2 text-white/80 hover:text-white text-sm font-medium transition-colors duration-200"
-        >
-          <UserPlus size={16} />
-          Registrati come professionista
-        </button>
-      </div>
+      <button
+        onClick={() => navigate('/signup')}
+        className="mt-3 inline-flex items-center gap-2 text-white/80 hover:text-white text-sm font-medium transition-colors duration-200"
+      >
+        <UserPlus size={16} />
+        Iscriviti come nutrizionista
+      </button>
 
       {/* Features pills */}
       <div className="flex flex-wrap items-center justify-center gap-2 mt-8">
-        {['Calcolo Crudo-Cotto', 'Database Completo', 'Condivisione con Pazienti', 'Profilo Personalizzato'].map((f) => (
+        {['Conversione Crudo ↔ Cotto', 'Database Alimenti', 'Link Pazienti'].map((f) => (
           <span key={f} className="text-xs bg-white/10 text-white/80 px-3 py-1.5 rounded-full backdrop-blur">{f}</span>
         ))}
       </div>
     </div>
 
-    {/* Hidden admin link */}
+    {/* Hidden master link */}
     <button
       onClick={() => navigate('/master/login')}
       className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/30 hover:text-white/60 text-[11px] transition-colors duration-300 tracking-wide"
     >
-      •&nbsp;&nbsp;Gestione&nbsp;&nbsp;•
+      •&nbsp;&nbsp;Admin&nbsp;&nbsp;•
     </button>
 
     {/* Login modal overlay — no page change */}
@@ -197,7 +199,7 @@ const Landing = ({ onLogin, showLogin = false }) => {
         <h1 className="text-2xl font-black text-cyan-900 text-center">
           Nutri<span className="text-emerald-600">Scale</span> <span className="text-cyan-900/50 font-light">Pro</span>
         </h1>
-        <p className="text-sm text-slate-500 mt-1 text-center">Accedi alla tua area professionale</p>
+        <p className="text-sm text-slate-500 mt-1 text-center">Accedi alla tua area nutrizionista</p>
         <div className="space-y-3 mt-6">
           <input data-autofocus value={email} onChange={(e) => setEmail(e.target.value)} className={inputStyle} placeholder="Email" type="email" required />
           <input value={password} onChange={(e) => setPassword(e.target.value)} className={inputStyle} placeholder="Password" type="password" required />
@@ -215,25 +217,29 @@ const PublicConverter = ({ slug }) => {
   const [weight, setWeight] = useState(100);
   const [rawToCooked, setRawToCooked] = useState(true);
   const [query, setQuery] = useState('');
-  const [codeInput, setCodeInput] = useState('');
-  const [accessError, setAccessError] = useState('');
-  const [isUnlocked, setIsUnlocked] = useState(false);
 
   useEffect(() => {
-    try {
-      const payload = publicApi.getTenantPage(slug);
-      setState({ loading: false, payload, error: '' });
-    } catch (error) {
-      setState({ loading: false, payload: null, error: error.message });
-    }
+    let cancelled = false;
+    const load = async () => {
+      try {
+        // Try remote RTDB first (works cross-device)
+        const remote = await fetchTenantPublic(slug);
+        if (!cancelled && remote) {
+          setState({ loading: false, payload: remote, error: '' });
+          return;
+        }
+      } catch { /* fall through to local */ }
+      // Fallback to local localStorage
+      try {
+        const payload = publicApi.getTenantPage(slug);
+        if (!cancelled) setState({ loading: false, payload, error: '' });
+      } catch (error) {
+        if (!cancelled) setState({ loading: false, payload: null, error: error.message });
+      }
+    };
+    load();
+    return () => { cancelled = true; };
   }, [slug]);
-
-  useEffect(() => {
-    if (!state.payload) return;
-    setIsUnlocked(!state.payload.requiresPatientCode);
-    setCodeInput('');
-    setAccessError('');
-  }, [state.payload]);
 
   const filtered = useMemo(() => {
     if (!state.payload?.foodDatabase) return [];
@@ -243,7 +249,7 @@ const PublicConverter = ({ slug }) => {
   if (state.loading) return <div className="min-h-screen bg-slate-50 p-8">Caricamento...</div>;
   if (state.error) return <div className="min-h-screen bg-slate-50 p-8 text-red-600">{state.error}</div>;
 
-  const { tenant, isAccessActive, renewalUrl, blockReason, requiresPatientCode, patientWelcomeMessage, globalPaymentLinks = [] } = state.payload;
+  const { tenant, isAccessActive, renewalUrl, blockReason } = state.payload;
 
   if (!isAccessActive) {
     return (
@@ -252,59 +258,13 @@ const PublicConverter = ({ slug }) => {
           <Lock className="mx-auto text-red-500" />
           <h1 className="text-xl font-bold mt-2">Accesso non attivo</h1>
           <p className="text-sm text-slate-500 mt-2">Il servizio del nutrizionista è {blockReason === 'bloccato' ? 'temporaneamente bloccato' : 'scaduto'}.</p>
-          {globalPaymentLinks.length > 0 ? (
-            <div className="mt-4 space-y-2 text-left">
-              <p className="text-xs font-semibold text-slate-500">Link pagamento disponibili</p>
-              {globalPaymentLinks.map((item) => (
-                <a key={item.id} href={item.url} className="inline-flex items-center gap-2 text-cyan-800 text-sm font-semibold" target="_blank" rel="noreferrer">
-                  {item.label} <ExternalLink size={13} />
-                </a>
-              ))}
-            </div>
-          ) : renewalUrl ? (
+          {renewalUrl ? (
             <a href={renewalUrl} className="inline-flex items-center gap-2 mt-5 px-4 py-2 rounded-xl bg-cyan-900 text-white" target="_blank" rel="noreferrer">
               Rinnova <ExternalLink size={14} />
             </a>
           ) : (
             <p className="text-sm mt-4">Contatta il tuo nutrizionista per il rinnovo.</p>
           )}
-        </div>
-      </div>
-    );
-  }
-
-  if (requiresPatientCode && !isUnlocked) {
-    return (
-      <div className="min-h-screen bg-slate-50 p-6 flex items-center justify-center mo-page-enter">
-        <div className="max-w-md w-full bg-white border border-slate-200 rounded-2xl p-6 text-center">
-          <img src={tenant.logoUrl || '/logo.png'} alt="Logo" className="w-20 h-20 mx-auto rounded-2xl border-2 border-slate-200 bg-white object-cover shadow-md" />
-          <h1 className="text-xl font-black text-cyan-900 mt-3">{tenant.displayName}</h1>
-          <p className="text-sm text-slate-500 mt-2">{patientWelcomeMessage}</p>
-
-          <form
-            className="mt-5 space-y-3"
-            onSubmit={(event) => {
-              event.preventDefault();
-              try {
-                publicApi.verifyPatientAccessCode(slug, codeInput);
-                setIsUnlocked(true);
-                setAccessError('');
-              } catch (err) {
-                setAccessError(err.message);
-              }
-            }}
-          >
-            <input
-              className={inputStyle}
-              type="password"
-              value={codeInput}
-              onChange={(event) => setCodeInput(event.target.value)}
-              placeholder="Inserisci codice accesso"
-              required
-            />
-            {accessError && <p className="text-xs text-red-600">{accessError}</p>}
-            <button className="w-full py-2.5 rounded-xl bg-cyan-900 text-white font-semibold">Entra nel calcolatore</button>
-          </form>
         </div>
       </div>
     );
@@ -372,13 +332,12 @@ const NutritionistRow = ({ user, tenant, subscription, accountStatus, session, r
     [ACCOUNT_STATUS.EXPIRED]: 'danger',
     [ACCOUNT_STATUS.SUSPENDED]: 'danger',
     [ACCOUNT_STATUS.REJECTED]: 'danger',
-    [ACCOUNT_STATUS.PAYMENT_REQUIRED]: 'warning',
   };
   const statusLabel = ACCOUNT_STATUS_LABELS[accountStatus] ?? accountStatus;
   const statusVariant = statusVariantMap[accountStatus] ?? 'default';
   const isActive = accountStatus === ACCOUNT_STATUS.ACTIVE;
   const isPending = accountStatus === ACCOUNT_STATUS.PENDING_APPROVAL;
-  const canActivate = [ACCOUNT_STATUS.APPROVED_NO_SUBSCRIPTION, ACCOUNT_STATUS.EXPIRED, ACCOUNT_STATUS.SUSPENDED, ACCOUNT_STATUS.PAYMENT_REQUIRED].includes(accountStatus);
+  const canActivate = [ACCOUNT_STATUS.APPROVED_NO_SUBSCRIPTION, ACCOUNT_STATUS.EXPIRED, ACCOUNT_STATUS.SUSPENDED].includes(accountStatus);
 
   return (
     <div className={`border rounded-2xl overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${expanded ? 'border-cyan-300 shadow-lg shadow-cyan-100/50 bg-white' : 'border-slate-200 bg-slate-50/80 hover:border-slate-300 hover:shadow-sm'}`}>
@@ -471,7 +430,6 @@ const NutritionistRow = ({ user, tenant, subscription, accountStatus, session, r
             <button className={`${btnSmDanger} inline-flex items-center gap-1`} onClick={async () => {
               if (await showConfirm('Eliminare nutrizionista?')) { masterApi.deleteNutritionist(session, tenant.id); refresh(); }
             }}><Trash2 size={13} /> Elimina</button>
-
           </div>
         </div>
       )}
@@ -487,12 +445,10 @@ const MasterDashboard = ({ session, onLogout }) => {
     email: '',
     password: '',
     plan: PLAN.TRIAL_14,
+    renewalUrl: '',
   });
-  const [paymentLinkDraft, setPaymentLinkDraft] = useState({ label: '', url: '' });
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
-  // Fix: define subscriptionActive for Paywall section (avoid crash)
-  const subscriptionActive = data && data.subscription && data.subscription.status === 'active';
 
   const showPrompt = useCallback(async (messageText, defaultValue = '') => {
     const value = window.prompt(messageText, defaultValue);
@@ -517,7 +473,7 @@ const MasterDashboard = ({ session, onLogout }) => {
   }, [refresh]);
 
   if (!data) {
-    return <div className="p-8">{error || 'Caricamento dashboard amministrazione...'}</div>;
+    return <div className="p-8">{error || 'Caricamento pannello...'}</div>;
   }
 
   // Fix: fallback to empty array if undefined
@@ -531,7 +487,7 @@ const MasterDashboard = ({ session, onLogout }) => {
     <div className="min-h-screen bg-slate-50 p-4 md:p-6 mo-page-enter">
       <div className="max-w-6xl mx-auto space-y-4">
         <div className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center justify-between gap-3">
-          <h1 className="text-xl md:text-2xl font-black text-cyan-900 flex items-center gap-2"><Shield size={20} /> Amministrazione Piattaforma</h1>
+          <h1 className="text-xl md:text-2xl font-black text-cyan-900 flex items-center gap-2"><Shield size={20} /> Pannello Amministrazione</h1>
           <div className="flex gap-2">
             <button onClick={refresh} className={btnOutline}>Aggiorna</button>
             <button onClick={onLogout} className={`${btnPrimary} flex items-center gap-1`}><LogOut size={14} /> Esci</button>
@@ -555,7 +511,7 @@ const MasterDashboard = ({ session, onLogout }) => {
                 if (!(await showConfirm(`Creare nutrizionista ${createForm.displayName}?`))) return;
                 try {
                   masterApi.createNutritionist(session, createForm);
-                  setCreateForm({ displayName: 'Dott. Nome Cognome', email: '', password: '', plan: PLAN.TRIAL_14 });
+                  setCreateForm({ displayName: 'Dott. Nome Cognome', email: '', password: '', plan: PLAN.TRIAL_14, renewalUrl: '' });
                   refresh();
                 } catch (createError) {
                   setError(createError.message);
@@ -640,63 +596,6 @@ const MasterDashboard = ({ session, onLogout }) => {
             </div>
           </Card>
 
-          <Card title="Link pagamento globali" icon={<ExternalLink size={16} />}>
-            <div className="space-y-2">
-              <div className="grid md:grid-cols-2 gap-2">
-                <input
-                  className={inputStyle}
-                  placeholder="Etichetta (es. Stripe 1 mese)"
-                  value={paymentLinkDraft.label}
-                  onChange={(event) => setPaymentLinkDraft((prev) => ({ ...prev, label: event.target.value }))}
-                />
-                <input
-                  className={inputStyle}
-                  placeholder="https://..."
-                  value={paymentLinkDraft.url}
-                  onChange={(event) => setPaymentLinkDraft((prev) => ({ ...prev, url: event.target.value }))}
-                />
-              </div>
-              <button
-                className={btnPrimary}
-                onClick={() => {
-                  const next = [...(data.globalPaymentLinks ?? [])];
-                  next.push({ id: `pay-${Date.now()}`, label: paymentLinkDraft.label.trim(), url: paymentLinkDraft.url.trim() });
-                  try {
-                    masterApi.setGlobalPaymentLinks(session, next);
-                    setPaymentLinkDraft({ label: '', url: '' });
-                    refresh();
-                  } catch (err) {
-                    setError(err.message);
-                  }
-                }}
-              >
-                Aggiungi link globale
-              </button>
-
-              <div className="space-y-1 max-h-40 overflow-auto pr-1">
-                {(data.globalPaymentLinks ?? []).length === 0 && <p className="text-sm text-slate-500">Nessun link globale configurato.</p>}
-                {(data.globalPaymentLinks ?? []).map((item) => (
-                  <div key={item.id} className="border border-slate-200 rounded-lg p-2 flex items-center justify-between gap-2">
-                    <a href={item.url} target="_blank" rel="noreferrer" className="text-xs text-cyan-800 font-semibold truncate">{item.label}</a>
-                    <button
-                      className={btnSmDanger}
-                      onClick={() => {
-                        try {
-                          masterApi.setGlobalPaymentLinks(session, (data.globalPaymentLinks ?? []).filter((link) => link.id !== item.id));
-                          refresh();
-                        } catch (err) {
-                          setError(err.message);
-                        }
-                      }}
-                    >
-                      Rimuovi
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </Card>
-
           <Card title="Comunicazioni" icon={<Megaphone size={16} />}>
             <div className="space-y-2">
               <input className={inputStyle} placeholder="Titolo" value={announcement.title} onChange={(event) => setAnnouncement((prev) => ({ ...prev, title: event.target.value }))} />
@@ -748,7 +647,7 @@ const MasterDashboard = ({ session, onLogout }) => {
         <div className="grid md:grid-cols-2 gap-4">
           <Card title="Notifiche" icon={<Bell size={16} />}>
             <div className="space-y-2 max-h-56 overflow-auto">
-              {data.notifications.length === 0 && <p className="text-sm text-slate-500">Nessuna notifica.</p>}
+              {data.notifications.length === 0 && <p className="text-sm text-slate-500">Nessuna notifica al momento.</p>}
               {data.notifications.map((notification) => (
                 <button key={notification.id} className="w-full text-left border border-slate-200 rounded-xl p-3 bg-slate-50" onClick={() => { nutritionistApi.markNotificationRead(session, notification.id); refresh(); }}>
                   <p className="font-semibold text-sm">{notification.title}</p>
@@ -759,65 +658,19 @@ const MasterDashboard = ({ session, onLogout }) => {
             </div>
           </Card>
 
-          <Card title="Comunicazioni" icon={<Megaphone size={16} />}>
+          <Card title="Feedback ricevuti" icon={<MessageSquare size={16} />}>
             <div className="space-y-2 max-h-56 overflow-auto">
-              {data.announcements.map((messageItem) => (
-                <article key={messageItem.id} className="border border-slate-200 rounded-xl p-3">
-                  <h4 className="font-semibold text-sm">{messageItem.title}</h4>
-                  <p className="text-xs text-slate-600 mt-1">{messageItem.body}</p>
+              {(!data.feedbacks || data.feedbacks.length === 0) && <p className="text-sm text-slate-500">Nessun feedback ricevuto.</p>}
+              {(data.feedbacks ?? []).map((fb) => (
+                <article key={fb.id} className="border border-slate-200 rounded-xl p-3">
+                  <div className="flex items-center justify-between">
+                    <p className="font-semibold text-sm text-cyan-900">{fb.subject}</p>
+                    <span className="text-[11px] text-slate-400">{formatDate(fb.createdAt)}</span>
+                  </div>
+                  <p className="text-xs text-slate-600 mt-1">{fb.body}</p>
+                  <p className="text-[11px] text-slate-500 mt-1">— {fb.nutritionistName}</p>
                 </article>
               ))}
-            </div>
-          </Card>
-
-          <Card title="Feedback nutrizionisti" icon={<Megaphone size={16} />}>
-            <div className="space-y-2 max-h-56 overflow-auto">
-              {(data.feedbacks ?? []).length === 0 && <p className="text-sm text-slate-500">Nessun feedback ricevuto.</p>}
-              {(data.feedbacks ?? []).map((item) => (
-                <article key={item.id} className="border border-slate-200 rounded-xl p-3">
-                  <h4 className="font-semibold text-sm">{item.subject}</h4>
-                  <p className="text-xs text-slate-500 mt-1">{item.nutritionistName} · {item.nutritionistEmail}</p>
-                  <p className="text-xs text-slate-600 mt-2">{item.body}</p>
-                  <p className="text-[11px] text-slate-400 mt-2">{formatDate(item.createdAt)}</p>
-                </article>
-              ))}
-            </div>
-          </Card>
-        </div>
-
-        <div className="grid md:grid-cols-1 gap-4">
-          <Card title="Paywall" icon={<Plus size={16} />}>
-            <div className="space-y-2 max-h-80 overflow-auto pr-1">
-              <p>Stato: {subscriptionActive ? <Badge variant="success">Attivo</Badge> : <Badge variant="danger">Non attivo</Badge>}</p>
-              <p>Scadenza: <strong>{data.subscription && data.subscription.endAt ? formatDate(data.subscription.endAt) : '—'}</strong></p>
-              <p>Prezzi correnti: 1 mese <strong>{data.currentPrices?.month1 ?? '—'}€</strong> · 12 mesi <strong>{data.currentPrices?.month12 ?? '—'}€</strong></p>
-              {(data.globalPaymentLinks ?? []).length > 0 ? (
-                <div className="space-y-1">
-                  {(data.globalPaymentLinks ?? []).map((item) => (
-                    <a key={item.id} href={item.url} target="_blank" rel="noreferrer" className="inline-flex mt-1 items-center gap-2 text-cyan-700 font-semibold">
-                      {item.label} <ExternalLink size={14} />
-                    </a>
-                  ))}
-                </div>
-              ) : <p className="text-slate-500">Nessun link pagamento globale configurato dal MASTER.</p>}
-              <div className="mt-6">
-                <SubscriptionPaywall
-                  plans={[
-                    { id: 'month_1', label: '1 mese', price: 9, promo: 'Promo attiva!' },
-                    { id: 'month_12', label: '12 mesi', price: 79, promo: '2 mesi gratis' },
-                  ]}
-                  defaultPlan="month_1"
-                  onSubmit={(payload) => {
-                    try {
-                      requestSubscription(session, payload);
-                      setMessage('Richiesta abbonamento inviata!');
-                      refresh();
-                    } catch (err) {
-                      setMessage('Errore: ' + err.message);
-                    }
-                  }}
-                />
-              </div>
             </div>
           </Card>
         </div>
@@ -833,9 +686,7 @@ const NutritionistDashboard = ({ session, onLogout }) => {
   const [data, setData] = useState(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-  const [activeSection, setActiveSection] = useState('clients');
-  const [clientAccessCode, setClientAccessCode] = useState('');
-  const [clientWelcomeMessage, setClientWelcomeMessage] = useState('');
+  const [dashboardView, setDashboardView] = useState('main'); // 'main' | 'subscription'
   const [feedbackSubject, setFeedbackSubject] = useState('');
   const [feedbackBody, setFeedbackBody] = useState('');
   const [billing, setBilling] = useState({
@@ -850,6 +701,7 @@ const NutritionistDashboard = ({ session, onLogout }) => {
     sdiCode: '',
   });
   const [requestPlan, setRequestPlan] = useState(PLAN.MONTH_1);
+  const [paymentLink, setPaymentLink] = useState('');
   const [referral, setReferral] = useState({ firstName: '', lastName: '', email: '' });
   const [notes, setNotes] = useState('');
 
@@ -866,50 +718,41 @@ const NutritionistDashboard = ({ session, onLogout }) => {
     refresh();
   }, [refresh]);
 
-  useEffect(() => {
-    if (!data?.tenant) return;
-    setClientAccessCode(data.tenant.patientAccessCode ?? '');
-    setClientWelcomeMessage(data.tenant.patientWelcomeMessage ?? '');
-  }, [data?.tenant?.id, data?.tenant?.patientAccessCode, data?.tenant?.patientWelcomeMessage]);
-
   if (!data) {
-    return <div className="p-8">{error || 'Caricamento dashboard...'}</div>;
+    return <div className="p-8">{error || 'Caricamento in corso...'}</div>;
   }
 
-  // Tutto il codice che usa 'data' va DOPO questo controllo!
   data.notifications = Array.isArray(data.notifications) ? data.notifications : [];
   data.referrals = Array.isArray(data.referrals) ? data.referrals : [];
   const subscriptionActive = data.subscription && data.subscription.status === 'active';
 
-  // ...existing code...
-
-  const blockedStatuses = [ACCOUNT_STATUS.SUSPENDED, ACCOUNT_STATUS.REJECTED, ACCOUNT_STATUS.PENDING_APPROVAL];
-
-  if (blockedStatuses.includes(data.accountStatus)) {
+  /* ── Feature gate: non-ACTIVE accounts see a restricted view ── */
+  if (data.accountStatus !== ACCOUNT_STATUS.ACTIVE) {
     const gateConfig = {
+      [ACCOUNT_STATUS.APPROVED_NO_SUBSCRIPTION]: {
+        icon: <Clock size={32} className="text-amber-500" />,
+        title: 'Account approvato',
+        desc: 'Il tuo account è stato approvato. L\'attivazione dell\'abbonamento è in fase di elaborazione.',
+        color: 'amber',
+      },
+      [ACCOUNT_STATUS.EXPIRED]: {
+        icon: <Calendar size={32} className="text-red-500" />,
+        title: 'Abbonamento scaduto',
+        desc: 'Il tuo abbonamento è scaduto. Ti invitiamo a contattare l\'amministratore per procedere con il rinnovo.',
+        color: 'red',
+        showSubscriptionRequest: true,
+      },
       [ACCOUNT_STATUS.SUSPENDED]: {
         icon: <Lock size={32} className="text-red-500" />,
         title: 'Account sospeso',
-        desc: 'Il tuo account è stato temporaneamente sospeso dall\'amministratore. Contatta il supporto.',
+        desc: 'Il tuo account è stato temporaneamente sospeso. Per assistenza, contatta il supporto tecnico.',
         color: 'red',
-      },
-      [ACCOUNT_STATUS.REJECTED]: {
-        icon: <XCircle size={32} className="text-red-500" />,
-        title: 'Iscrizione rifiutata',
-        desc: 'La richiesta di accesso è stata rifiutata. Contatta l\'amministratore per maggiori informazioni.',
-        color: 'red',
-      },
-      [ACCOUNT_STATUS.PENDING_APPROVAL]: {
-        icon: <Clock size={32} className="text-amber-500" />,
-        title: 'In attesa di approvazione',
-        desc: 'Il tuo account è in revisione. Potrai usare la dashboard dopo l\'approvazione.',
-        color: 'amber',
       },
     };
     const gate = gateConfig[data.accountStatus] ?? {
       icon: <Lock size={32} className="text-slate-400" />,
-      title: 'Accesso non attivo',
-      desc: 'Il tuo account non è attualmente attivo.',
+      title: 'Account non attivo',
+      desc: 'Il tuo account non risulta attualmente attivo. Per ulteriori informazioni, contatta il supporto.',
       color: 'slate',
     };
 
@@ -924,11 +767,10 @@ const NutritionistDashboard = ({ session, onLogout }) => {
             <div className="mt-5 bg-slate-50 rounded-xl p-3 text-sm text-left">
               <p className="text-slate-600"><strong>Profilo:</strong> {data.tenant.displayName}</p>
               <p className="text-slate-500 text-xs mt-1">Link pazienti: <span className="font-mono text-slate-400">{data.publicUrl}</span></p>
-              <p className="text-[11px] text-amber-600 mt-1 flex items-center gap-1"><Lock size={11} /> Il link verrà attivato dopo l'abbonamento</p>
+              <p className="text-[11px] text-amber-600 mt-1 flex items-center gap-1"><Lock size={11} /> Il link sarà attivo con l'abbonamento</p>
             </div>
           )}
 
-          {/* Notifications */}
           {data.notifications.length > 0 && (
             <div className="mt-5 text-left">
               <p className="text-xs font-semibold text-slate-500 mb-2">Notifiche</p>
@@ -951,366 +793,255 @@ const NutritionistDashboard = ({ session, onLogout }) => {
     );
   }
 
-  // const subscriptionActive = data.accountStatus === ACCOUNT_STATUS.ACTIVE; // Già dichiarato sopra
   const visibleSlots = data.promotions.slotsPromo?.slotsVisible ?? 10;
   const maxSlots = data.promotions.slotsPromo?.maxDiscountedUsers ?? 20;
   const usedSlots = data.promotions.slotsPromo?.discountedJoinedCount ?? 0;
-  const needsSubscriptionAction = [ACCOUNT_STATUS.APPROVED_NO_SUBSCRIPTION, ACCOUNT_STATUS.EXPIRED, ACCOUNT_STATUS.PAYMENT_REQUIRED].includes(data.accountStatus);
 
-  return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-6 mo-page-enter">
-      <div className="max-w-6xl mx-auto space-y-4">
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            {data.tenant.logoUrl ? (
-              <img src={data.tenant.logoUrl} alt="Logo" className="w-14 h-14 rounded-xl object-cover border-2 border-cyan-200 shadow-sm" />
-            ) : (
-              <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 border-2 border-slate-300 border-dashed flex items-center justify-center">
-                <span className="text-slate-400 text-xs font-semibold">Logo</span>
-              </div>
-            )}
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl md:text-2xl font-black text-cyan-900">Dashboard di {data.tenant.displayName}</h1>
-                {BETA_MODE && <BetaBadge />}
-              </div>
-              <p className="text-sm text-slate-500">NutriScale per Professionisti</p>
-            </div>
-          </div>
-          <button onClick={onLogout} className={`${btnPrimary} flex items-center gap-1`}><LogOut size={14} /> Esci</button>
+  /* ── Shared header ── */
+  const dashboardHeader = (
+    <>
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl md:text-2xl font-black text-cyan-900 flex items-center gap-2">
+            {dashboardView === 'main' ? 'La tua area riservata' : 'Gestione Abbonamento'} {BETA_MODE && <BetaBadge />}
+          </h1>
+          <p className="text-sm text-slate-500">{data.tenant.displayName}</p>
         </div>
+        <button onClick={onLogout} className={`${btnPrimary} flex items-center gap-1`}><LogOut size={14} /> Esci</button>
+      </div>
+      {BETA_MODE && <BetaBanner tenantCreatedAt={data.subscription?.startAt} />}
+      {/* Tab di navigazione */}
+      <div className="flex gap-2 justify-center">
+        <button onClick={() => setDashboardView('main')} className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 ${dashboardView === 'main' ? 'bg-cyan-900 text-white shadow-sm' : 'bg-white text-slate-500 border border-slate-200 hover:border-cyan-300 hover:text-cyan-700'}`}>
+          <span className="inline-flex items-center gap-1.5"><Users size={12} /> Area riservata</span>
+        </button>
+        <button onClick={() => setDashboardView('subscription')} className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 ${dashboardView === 'subscription' ? 'bg-cyan-900 text-white shadow-sm' : 'bg-white text-slate-500 border border-slate-200 hover:border-cyan-300 hover:text-cyan-700'}`}>
+          <span className="inline-flex items-center gap-1.5"><Calendar size={12} /> Abbonamento</span>
+        </button>
+      </div>
+    </>
+  );
 
-        {BETA_MODE && <BetaBanner />}
+  /* ══════════════════════════════════════════════════════════
+     VIEW: MAIN — Profilo + Feedback
+     ══════════════════════════════════════════════════════════ */
+  if (dashboardView === 'main') {
+    return (
+      <div className="min-h-screen bg-slate-50 p-4 md:p-6 mo-page-enter">
+        <div className="max-w-6xl mx-auto space-y-4">
+          {dashboardHeader}
 
-        {needsSubscriptionAction && !BETA_MODE && (
-          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-sm text-amber-900">
-            <p className="font-semibold">Abbonamento non attivo</p>
-            <p className="mt-1">Puoi comunque scegliere il piano e inviare la richiesta di pagamento dalla sezione “Richiedi abbonamento”.</p>
-          </div>
-        )}
+          <div className="grid lg:grid-cols-2 gap-4">
+            {/* Profilo e gestione pazienti */}
+            <Card title="Il tuo profilo" icon={<Users size={16} />}>
+              <div className="space-y-3">
+                <img src={data.tenant.logoUrl || '/logo.png'} alt="Logo" className="h-16 w-16 rounded-xl object-cover border border-slate-200" />
+                <input className={inputStyle} defaultValue={data.tenant.displayName} onBlur={(event) => {
+                  const value = event.target.value.trim();
+                  if (!isValidDoctorDisplayName(value)) {
+                    setError('Il formato richiesto è: Dott. Nome Cognome');
+                    return;
+                  }
+                  try {
+                    nutritionistApi.updateBranding(session, { displayName: value });
+                    setMessage('Nome aggiornato correttamente.');
+                    refresh();
+                  } catch (brandingError) {
+                    setError(brandingError.message);
+                  }
+                }} placeholder="Dott. Nome Cognome" />
 
-        <div className="bg-white border border-slate-200 rounded-2xl p-2 inline-flex gap-2 w-fit">
-          <button className={`${activeSection === 'clients' ? btnPrimary : btnOutline}`} onClick={() => setActiveSection('clients')}>Gestione clienti</button>
-          <button className={`${activeSection === 'dashboard' ? btnPrimary : btnOutline}`} onClick={() => setActiveSection('dashboard')}>Dashboard operativa</button>
-        </div>
-
-        {activeSection === 'clients' && <div className="grid lg:grid-cols-2 gap-4">
-          <Card title="Profilo pubblico" icon={<Users size={16} />}>
-            <div className="space-y-3">
-              {data.tenant.logoUrl ? (
-                <img src={data.tenant.logoUrl} alt="Logo" className="h-20 w-20 rounded-2xl object-cover border-2 border-cyan-200 shadow-md" />
-              ) : (
-                <div className="h-20 w-20 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 border-2 border-slate-300 border-dashed flex flex-col items-center justify-center">
-                  <span className="text-slate-400 text-xs font-semibold">Il tuo</span>
-                  <span className="text-slate-400 text-xs font-semibold">Logo</span>
-                </div>
-              )}
-              <input className={inputStyle} defaultValue={data.tenant.displayName} onBlur={(event) => {
-                const value = event.target.value.trim();
-                if (!isValidDoctorDisplayName(value)) {
-                  setError('Formato obbligatorio: Dott. Nome Cognome');
-                  return;
-                }
-                try {
-                  nutritionistApi.updateBranding(session, { displayName: value });
-                  setMessage('Nome aggiornato');
-                  refresh();
-                } catch (brandingError) {
-                  setError(brandingError.message);
-                }
-              }} placeholder="Dott. Nome Cognome" />
-
-              <label className="block">
-                <span className="text-xs text-slate-500">Carica logo (max 1MB, PNG/JPEG/WEBP)</span>
-                <div className="relative mt-1">
-                  <input
-                    type="file"
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                    accept="image/png,image/jpeg,image/webp"
-                    onChange={(event) => {
+                <label className="block">
+                  <span className="text-xs text-slate-500">Carica il tuo logo (max 1MB, PNG/JPEG/WEBP)</span>
+                  <div className="relative mt-1">
+                    <input type="file" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" accept="image/png,image/jpeg,image/webp" onChange={(event) => {
                       const file = event.target.files?.[0];
                       if (!file) return;
                       const reader = new FileReader();
                       reader.onloadend = () => {
                         try {
-                          nutritionistApi.updateBranding(session, {
-                            logo: {
-                              type: file.type,
-                              size: file.size,
-                              filename: file.name,
-                              dataUrl: reader.result,
-                            },
-                          });
-                          setMessage('Logo aggiornato');
+                          nutritionistApi.updateBranding(session, { logo: { type: file.type, size: file.size, filename: file.name, dataUrl: reader.result } });
+                          setMessage('Logo aggiornato correttamente.');
                           refresh();
                         } catch (uploadError) {
                           setError(uploadError.message);
                         }
                       };
                       reader.readAsDataURL(file);
-                    }}
-                  />
-                  <div className="flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-dashed border-slate-300 hover:border-cyan-400 hover:bg-cyan-50/30 transition-all duration-200 cursor-pointer">
-                    <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-cyan-100 text-cyan-700">
-                      <Plus size={18} />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-slate-700">Scegli file</p>
-                      <p className="text-[11px] text-slate-400">PNG, JPEG o WEBP · max 1MB</p>
+                    }} />
+                    <div className="flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-dashed border-slate-300 hover:border-cyan-400 hover:bg-cyan-50/30 transition-all duration-200 cursor-pointer">
+                      <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-cyan-100 text-cyan-700"><Plus size={18} /></div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-700">Scegli file</p>
+                        <p className="text-[11px] text-slate-400">PNG, JPEG o WEBP · max 1MB</p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </label>
+                </label>
 
-              <div className="group relative rounded-2xl bg-gradient-to-r from-cyan-50/80 to-slate-50 border border-cyan-200/60 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-cyan-100 text-cyan-700 shrink-0">
-                      <Globe size={18} />
+                <div className="group relative rounded-2xl bg-gradient-to-r from-cyan-50/80 to-slate-50 border border-cyan-200/60 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-cyan-100 text-cyan-700 shrink-0"><Globe size={18} /></div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-cyan-800 uppercase tracking-wider">Link pubblico pazienti</p>
+                        <p className="text-sm text-slate-600 truncate mt-0.5 font-mono">{data.publicUrl}</p>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold text-cyan-800 uppercase tracking-wider">Link pubblico pazienti</p>
-                      <p className="text-sm text-slate-600 truncate mt-0.5 font-mono">{data.publicUrl}</p>
-                    </div>
-                  </div>
-                  <button
-                    className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-cyan-900 text-white text-xs font-semibold hover:bg-cyan-800 active:scale-[0.97] shadow-sm transition-all duration-150"
-                    onClick={() => { navigator.clipboard?.writeText(data.publicUrl); setMessage('Link copiato!'); setTimeout(() => setMessage(''), 2000); }}
-                  >
-                    <Copy size={13} /> Copia
-                  </button>
-                </div>
-                {!subscriptionActive && !BETA_MODE && (
-                  <p className="text-[11px] text-amber-600 mt-2 flex items-center gap-1">
-                    <Lock size={11} /> Il link sarà attivo dopo l'approvazione dell'abbonamento
-                  </p>
-                )}
-
-                <div className="mt-4 border-t border-slate-200 pt-3 space-y-2">
-                  <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Codice di accesso per pazienti (opzionale)</p>
-                  <input
-                    className={inputStyle}
-                    type="password"
-                    value={clientAccessCode}
-                    onChange={(event) => setClientAccessCode(event.target.value)}
-                    placeholder="Imposta codice accesso pazienti (min 4 caratteri)"
-                  />
-                  <textarea
-                    className={inputStyle}
-                    rows={2}
-                    value={clientWelcomeMessage}
-                    onChange={(event) => setClientWelcomeMessage(event.target.value)}
-                    placeholder="Messaggio di benvenuto pagina accesso"
-                  />
-                  <div className="flex gap-2">
-                    <button
-                      className={btnPrimary}
-                      onClick={() => {
-                        try {
-                          nutritionistApi.updatePatientAccessSettings(session, {
-                            accessCode: clientAccessCode,
-                            welcomeMessage: clientWelcomeMessage,
-                          });
-                          setMessage('Impostazioni accesso pazienti salvate');
-                          refresh();
-                        } catch (settingsError) {
-                          setError(settingsError.message);
-                        }
-                      }}
-                    >
-                      Salva accesso
-                    </button>
-                    <button
-                      className={btnOutline}
-                      onClick={() => {
-                        try {
-                          nutritionistApi.updatePatientAccessSettings(session, {
-                            accessCode: '',
-                            welcomeMessage: clientWelcomeMessage,
-                          });
-                          setClientAccessCode('');
-                          setMessage('Accesso diretto ripristinato (senza codice)');
-                          refresh();
-                        } catch (settingsError) {
-                          setError(settingsError.message);
-                        }
-                      }}
-                    >
-                      Disattiva codice
+                    <button className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-cyan-900 text-white text-xs font-semibold hover:bg-cyan-800 active:scale-[0.97] shadow-sm transition-all duration-150" onClick={() => { navigator.clipboard?.writeText(data.publicUrl); setMessage('Link copiato negli appunti.'); setTimeout(() => setMessage(''), 2000); }}>
+                      <Copy size={13} /> Copia
                     </button>
                   </div>
+                  {!subscriptionActive && (
+                    <p className="text-[11px] text-amber-600 mt-2 flex items-center gap-1">
+                      <Lock size={11} /> Il link sarà attivo dopo l'approvazione dell'abbonamento
+                    </p>
+                  )}
                 </div>
               </div>
-            </div>
-          </Card>
+            </Card>
 
-          <Card title={BETA_MODE ? "🌟 Feedback e suggerimenti" : "Feedback e suggerimenti"} icon={<Megaphone size={16} />}>
-            {BETA_MODE && (
-              <div className="mb-3 p-3 bg-gradient-to-r from-emerald-50 to-cyan-50 rounded-xl border border-emerald-200">
-                <p className="text-xs text-slate-700 font-semibold">Il tuo feedback è prezioso per migliorare NutriScale Pro!</p>
-              </div>
-            )}
-            <div className="space-y-2">
-              <input
-                className={inputStyle}
-                placeholder="Oggetto"
-                value={feedbackSubject}
-                onChange={(event) => setFeedbackSubject(event.target.value)}
-              />
-              <textarea
-                className={inputStyle}
-                rows={4}
-                placeholder="Descrivi la miglioria che vorresti"
-                value={feedbackBody}
-                onChange={(event) => setFeedbackBody(event.target.value)}
-              />
-              <button
-                className={btnPrimary}
-                onClick={() => {
+            {/* Feedback e suggerimenti */}
+            <Card title="Feedback e suggerimenti" icon={<MessageSquare size={16} />}>
+              <div className="space-y-3">
+                <p className="text-sm text-slate-500 leading-relaxed">
+                  La tua opinione è preziosa per migliorare NutriScale Pro. Condividi suggerimenti, segnala problemi o proponi nuove funzionalità.
+                </p>
+                <input className={inputStyle} placeholder="Oggetto del messaggio" value={feedbackSubject} onChange={(e) => setFeedbackSubject(e.target.value)} />
+                <textarea className={inputStyle} rows={4} placeholder="Scrivi qui il tuo messaggio..." value={feedbackBody} onChange={(e) => setFeedbackBody(e.target.value)} />
+                <button className={btnPrimary} onClick={() => {
                   try {
                     nutritionistApi.submitFeedback(session, { subject: feedbackSubject, body: feedbackBody });
                     setFeedbackSubject('');
                     setFeedbackBody('');
-                    setMessage('Feedback inviato con successo');
-                    refresh();
-                  } catch (feedbackError) {
-                    setError(feedbackError.message);
+                    setMessage('Grazie! Il tuo feedback è stato inviato correttamente.');
+                    setTimeout(() => setMessage(''), 3000);
+                  } catch (err) {
+                    setError(err.message);
                   }
-                }}
-              >
-                Invia feedback
-              </button>
-            </div>
-          </Card>
-        </div>}
+                }}>
+                  <span className="inline-flex items-center gap-1.5"><MessageSquare size={14} /> Invia feedback</span>
+                </button>
+              </div>
+            </Card>
+          </div>
 
-        {activeSection === 'dashboard' && <BetaOverlay section="operativeDashboard">
-        <div className="space-y-4">
-        <div className="grid lg:grid-cols-2 gap-4">
-          <BetaOverlay section="promotions">
-            <Card title="Promozioni e referral" icon={<CircleDollarSign size={16} />}>
-              <div className="space-y-3 text-sm">
-              {data.promotions.slotsPromo?.active && (
-                <div className="border border-slate-200 rounded-xl p-3">
-                  <p className="font-semibold">Promo porta un amico (slot limitati)</p>
-                  <p className="text-slate-500">Posti agevolati rimasti: {Math.max(maxSlots - usedSlots, 0)} / {maxSlots}</p>
-                  <div className="mt-2 grid grid-cols-10 gap-1">
-                    {Array.from({ length: visibleSlots }).map((_, index) => (
-                      <span key={index} className={`h-3 rounded ${index < Math.min(usedSlots, visibleSlots) ? 'bg-cyan-700' : 'bg-slate-200'}`}></span>
+          {message && <p className="text-sm text-emerald-700 bg-emerald-50 rounded-xl p-3">{message}</p>}
+          {error && <p className="text-sm text-red-700 bg-red-50 rounded-xl p-3">{error}</p>}
+        </div>
+      </div>
+    );
+  }
+
+  /* ══════════════════════════════════════════════════════════
+     VIEW: SUBSCRIPTION — Abbonamento (Work in Progress)
+     ══════════════════════════════════════════════════════════ */
+  return (
+    <div className="min-h-screen bg-slate-50 p-4 md:p-6 mo-page-enter">
+      <div className="max-w-6xl mx-auto space-y-4">
+        {dashboardHeader}
+
+        <BetaOverlay section="operativeDashboard">
+          <div className="space-y-4">
+            <div className="grid lg:grid-cols-2 gap-4">
+              <Card title="Abbonamento" icon={<Calendar size={16} />}>
+                <div className="space-y-2 text-sm">
+                  <p>Stato: {subscriptionActive ? <Badge variant="success">Attivo</Badge> : <Badge variant="danger">Non attivo</Badge>}</p>
+                  <p>Scadenza: <strong>{formatDate(data.subscription.endAt)}</strong></p>
+                  <p>Prezzi correnti: 1 mese <strong>{data.currentPrices.month1}€</strong> · 12 mesi <strong>{data.currentPrices.month12}€</strong></p>
+                  {data.subscription.renewalUrl ? (
+                    <a href={data.subscription.renewalUrl} target="_blank" rel="noreferrer" className="inline-flex mt-1 items-center gap-2 text-cyan-700 font-semibold">Rinnova <ExternalLink size={14} /></a>
+                  ) : (
+                    <p className="text-slate-500">Il link per il rinnovo sarà disponibile a breve.</p>
+                  )}
+                </div>
+              </Card>
+
+              <Card title="Promozioni e referral" icon={<CircleDollarSign size={16} />}>
+                <div className="space-y-3 text-sm">
+                  {data.promotions.slotsPromo?.active && (
+                    <div className="border border-slate-200 rounded-xl p-3">
+                      <p className="font-semibold">Promozione: Porta un amico</p>
+                      <p className="text-slate-500">Posti agevolati rimasti: {Math.max(maxSlots - usedSlots, 0)} / {maxSlots}</p>
+                      <div className="mt-2 grid grid-cols-10 gap-1">
+                        {Array.from({ length: visibleSlots }).map((_, index) => (
+                          <span key={index} className={`h-3 rounded ${index < Math.min(usedSlots, visibleSlots) ? 'bg-cyan-700' : 'bg-slate-200'}`}></span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {data.promotions.freeMonthPromo?.active && <p className="text-slate-700">Promozione attiva: <strong>+1 mese gratuito</strong> per ogni referral con acquisto confermato.</p>}
+                  <div className="grid md:grid-cols-4 gap-2">
+                    <input className={inputStyle} placeholder="Nome" value={referral.firstName} onChange={(event) => setReferral((prev) => ({ ...prev, firstName: event.target.value }))} />
+                    <input className={inputStyle} placeholder="Cognome" value={referral.lastName} onChange={(event) => setReferral((prev) => ({ ...prev, lastName: event.target.value }))} />
+                    <input className={inputStyle} placeholder="Email" value={referral.email} onChange={(event) => setReferral((prev) => ({ ...prev, email: event.target.value }))} />
+                    <button className={btnPrimary} onClick={() => {
+                      try { nutritionistApi.addReferral(session, referral); setReferral({ firstName: '', lastName: '', email: '' }); setMessage('Referral inserito correttamente.'); refresh(); } catch (refError) { setError(refError.message); }
+                    }}>Inserisci</button>
+                  </div>
+                  <div className="space-y-1 max-h-40 overflow-auto pr-1">
+                    {data.referrals.map((item) => (
+                      <div key={item.id} className="border border-slate-200 rounded-lg p-2 flex items-center justify-between">
+                        <span className="text-xs">{item.firstName} {item.lastName} · {item.email}</span>
+                        <Badge variant={item.status === 'purchased' ? 'success' : 'warning'}>{item.status}</Badge>
+                      </div>
                     ))}
                   </div>
                 </div>
-              )}
+              </Card>
+            </div>
 
-              {data.promotions.freeMonthPromo?.active && <p className="text-slate-700">Promo attiva: <strong>+1 mese gratis</strong> per ogni referral con acquisto confermato.</p>}
-
-              <div className="grid md:grid-cols-4 gap-2">
-                <input className={inputStyle} placeholder="Nome" value={referral.firstName} onChange={(event) => setReferral((prev) => ({ ...prev, firstName: event.target.value }))} />
-                <input className={inputStyle} placeholder="Cognome" value={referral.lastName} onChange={(event) => setReferral((prev) => ({ ...prev, lastName: event.target.value }))} />
-                <input className={inputStyle} placeholder="Email" value={referral.email} onChange={(event) => setReferral((prev) => ({ ...prev, email: event.target.value }))} />
-                <button className={btnPrimary} onClick={() => {
-                  try {
-                    nutritionistApi.addReferral(session, referral);
-                    setReferral({ firstName: '', lastName: '', email: '' });
-                    setMessage('Referral inserito');
-                    refresh();
-                  } catch (refError) {
-                    setError(refError.message);
-                  }
-                }}>Inserisci</button>
-              </div>
-
-              <div className="space-y-1 max-h-40 overflow-auto pr-1">
-                {data.referrals.map((item) => (
-                  <div key={item.id} className="border border-slate-200 rounded-lg p-2 flex items-center justify-between">
-                    <span className="text-xs">{item.firstName} {item.lastName} · {item.email}</span>
-                    <Badge variant={item.status === 'purchased' ? 'success' : 'warning'}>{item.status}</Badge>
-                  </div>
-                ))}
-              </div>
+            <Card title="Richiedi abbonamento" icon={<Plus size={16} />}>
+              <div className="grid md:grid-cols-2 gap-2">
+                <input className={inputStyle} placeholder="Nome" value={billing.firstName} onChange={(event) => setBilling((prev) => ({ ...prev, firstName: event.target.value }))} />
+                <input className={inputStyle} placeholder="Cognome" value={billing.lastName} onChange={(event) => setBilling((prev) => ({ ...prev, lastName: event.target.value }))} />
+                <input className={inputStyle} placeholder="Ragione sociale (opzionale)" value={billing.company} onChange={(event) => setBilling((prev) => ({ ...prev, company: event.target.value }))} />
+                <input className={inputStyle} placeholder="P.IVA / Codice Fiscale" value={billing.taxCodeOrVat} onChange={(event) => setBilling((prev) => ({ ...prev, taxCodeOrVat: event.target.value }))} />
+                <input className={`${inputStyle} md:col-span-2`} placeholder="Indirizzo" value={billing.address} onChange={(event) => setBilling((prev) => ({ ...prev, address: event.target.value }))} />
+                <input className={inputStyle} placeholder="Paese" value={billing.country} onChange={(event) => setBilling((prev) => ({ ...prev, country: event.target.value }))} />
+                <input className={inputStyle} placeholder="Email di contatto" value={billing.contactEmail} onChange={(event) => setBilling((prev) => ({ ...prev, contactEmail: event.target.value }))} />
+                <input className={inputStyle} placeholder="PEC (opzionale)" value={billing.pecEmail} onChange={(event) => setBilling((prev) => ({ ...prev, pecEmail: event.target.value }))} />
+                <input className={inputStyle} placeholder="Codice SDI (opzionale)" value={billing.sdiCode} onChange={(event) => setBilling((prev) => ({ ...prev, sdiCode: event.target.value }))} />
+                <Select options={planOptions.map((plan) => ({ value: plan, label: PLAN_LABELS[plan] }))} value={requestPlan} onChange={(val) => setRequestPlan(val)} />
+                <input className={`${inputStyle} md:col-span-2`} placeholder="Link pagamento / istruzioni" value={paymentLink} onChange={(event) => setPaymentLink(event.target.value)} />
+                <textarea className={`${inputStyle} md:col-span-2`} rows={2} placeholder="Note aggiuntive" value={notes} onChange={(event) => setNotes(event.target.value)} />
+                <button className={`${btnPrimary} py-2.5 md:col-span-2`} onClick={() => {
+                  try { nutritionistApi.submitSubscriptionRequest(session, { plan: requestPlan, billing, paymentLink, notes }); setMessage('La tua richiesta è stata inviata correttamente.'); refresh(); } catch (requestError) { setError(requestError.message); }
+                }}>Invia richiesta di abbonamento</button>
               </div>
             </Card>
-          </BetaOverlay>
 
-          <div></div>
-        </div>
-
-        <div className="grid lg:grid-cols-2 gap-4">
-          <BetaOverlay section="subscription">
-            <Card title="Abbonamento" icon={<Calendar size={16} />}>
-            <div className="space-y-2 text-sm">
-              <p>Stato: {subscriptionActive ? <Badge variant="success">Attivo</Badge> : <Badge variant="danger">Non attivo</Badge>}</p>
-              <p>Scadenza: <strong>{formatDate(data.subscription.endAt)}</strong></p>
-              <p>Prezzi correnti: 1 mese <strong>{data.currentPrices.month1}€</strong> · 12 mesi <strong>{data.currentPrices.month12}€</strong></p>
-              {(data.globalPaymentLinks ?? []).length > 0 ? (
-                <div className="space-y-1">
-                  {(data.globalPaymentLinks ?? []).map((item) => (
-                    <a key={item.id} href={item.url} target="_blank" rel="noreferrer" className="inline-flex mt-1 items-center gap-2 text-cyan-700 font-semibold">
-                      {item.label} <ExternalLink size={14} />
-                    </a>
+            <div className="grid lg:grid-cols-2 gap-4">
+              <Card title="Notifiche" icon={<Bell size={16} />}>
+                <div className="space-y-2 max-h-56 overflow-auto">
+                  {data.notifications.length === 0 && <p className="text-sm text-slate-500">Nessuna notifica al momento.</p>}
+                  {data.notifications.map((notification) => (
+                    <button key={notification.id} className="w-full text-left border border-slate-200 rounded-xl p-3 bg-slate-50" onClick={() => { nutritionistApi.markNotificationRead(session, notification.id); refresh(); }}>
+                      <p className="font-semibold text-sm">{notification.title}</p>
+                      <p className="text-xs text-slate-600 mt-1">{notification.body}</p>
+                      <p className="text-[11px] text-slate-400 mt-2">{formatDate(notification.createdAt)}</p>
+                    </button>
                   ))}
                 </div>
-              ) : (
-                <p className="text-slate-500">Nessun link pagamento globale configurato dal MASTER.</p>
-              )}
+              </Card>
+
+              <Card title="Comunicazioni" icon={<Megaphone size={16} />}>
+                <div className="space-y-2 max-h-56 overflow-auto">
+                  {data.announcements.length === 0 && <p className="text-sm text-slate-500">Nessun avviso al momento.</p>}
+                  {data.announcements.map((messageItem) => (
+                    <article key={messageItem.id} className="border border-slate-200 rounded-xl p-3">
+                      <h4 className="font-semibold text-sm">{messageItem.title}</h4>
+                      <p className="text-xs text-slate-600 mt-1">{messageItem.body}</p>
+                    </article>
+                  ))}
+                </div>
+              </Card>
             </div>
-          </Card>
-          </BetaOverlay>
+          </div>
+        </BetaOverlay>
 
-          <BetaOverlay section="subscriptionRequest">
-            <Card title="Richiedi abbonamento" icon={<Plus size={16} />}>
-            <div className="grid md:grid-cols-2 gap-2">
-              <input className={inputStyle} placeholder="Nome" value={billing.firstName} onChange={(event) => setBilling((prev) => ({ ...prev, firstName: event.target.value }))} />
-              <input className={inputStyle} placeholder="Cognome" value={billing.lastName} onChange={(event) => setBilling((prev) => ({ ...prev, lastName: event.target.value }))} />
-              <input className={inputStyle} placeholder="Ragione sociale (opz.)" value={billing.company} onChange={(event) => setBilling((prev) => ({ ...prev, company: event.target.value }))} />
-              <input className={inputStyle} placeholder="P.IVA / CF" value={billing.taxCodeOrVat} onChange={(event) => setBilling((prev) => ({ ...prev, taxCodeOrVat: event.target.value }))} />
-              <input className={`${inputStyle} md:col-span-2`} placeholder="Indirizzo" value={billing.address} onChange={(event) => setBilling((prev) => ({ ...prev, address: event.target.value }))} />
-              <input className={inputStyle} placeholder="Paese" value={billing.country} onChange={(event) => setBilling((prev) => ({ ...prev, country: event.target.value }))} />
-              <input className={inputStyle} placeholder="Email/PEC" value={billing.contactEmail} onChange={(event) => setBilling((prev) => ({ ...prev, contactEmail: event.target.value }))} />
-              <input className={inputStyle} placeholder="PEC (opz.)" value={billing.pecEmail} onChange={(event) => setBilling((prev) => ({ ...prev, pecEmail: event.target.value }))} />
-              <input className={inputStyle} placeholder="SDI (opz.)" value={billing.sdiCode} onChange={(event) => setBilling((prev) => ({ ...prev, sdiCode: event.target.value }))} />
-              <Select
-                options={planOptions.map((plan) => ({ value: plan, label: PLAN_LABELS[plan] }))}
-                value={requestPlan}
-                onChange={(val) => setRequestPlan(val)}
-              />
-              <textarea className={`${inputStyle} md:col-span-2`} rows={2} placeholder="Note" value={notes} onChange={(event) => setNotes(event.target.value)} />
-              <button className={`${btnPrimary} py-2.5 md:col-span-2`} onClick={() => {
-                try {
-                  nutritionistApi.submitSubscriptionRequest(session, { plan: requestPlan, billing, notes });
-                  setMessage('Richiesta inviata');
-                  refresh();
-                } catch (requestError) {
-                  setError(requestError.message);
-                }
-              }}>Invia richiesta</button>
-            </div>
-          </Card>
-          </BetaOverlay>
-        </div>
-
-        <div className="grid lg:grid-cols-3 gap-4">
-          <Card title="Notifiche" icon={<Bell size={16} />}>
-            <div className="space-y-2 max-h-56 overflow-auto">
-              {data.notifications.length === 0 && <p className="text-sm text-slate-500">Nessuna notifica.</p>}
-              {data.notifications.map((notification) => (
-                <button key={notification.id} className="w-full text-left border border-slate-200 rounded-xl p-3 bg-slate-50" onClick={() => { nutritionistApi.markNotificationRead(session, notification.id); refresh(); }}>
-                  <p className="font-semibold text-sm">{notification.title}</p>
-                  <p className="text-xs text-slate-600 mt-1">{notification.body}</p>
-                  <p className="text-[11px] text-slate-400 mt-2">{formatDate(notification.createdAt)}</p>
-                </button>
-              ))}
-            </div>
-          </Card>
-
-          <div></div>
-          <div></div>
-        </div>
-        </div>
-        </BetaOverlay>}
-
-        {message && <p className="text-sm text-emerald-700">{message}</p>}
-        {error && <p className="text-sm text-red-700">{error}</p>}
+        {message && <p className="text-sm text-emerald-700 bg-emerald-50 rounded-xl p-3">{message}</p>}
+        {error && <p className="text-sm text-red-700 bg-red-50 rounded-xl p-3">{error}</p>}
       </div>
     </div>
   );

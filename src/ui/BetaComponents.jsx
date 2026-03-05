@@ -1,4 +1,4 @@
-import { Lock, Sparkles, MessageSquare } from 'lucide-react';
+import { Clock, Lock, Sparkles, MessageSquare } from 'lucide-react';
 import { BETA_CONFIG } from '../core/betaConfig';
 
 /**
@@ -140,7 +140,14 @@ export const BetaOverlay = ({ children, section, variant = 'default' }) => {
 /**
  * Banner Beta da mostrare in cima alla dashboard
  */
-export const BetaBanner = () => {
+export const BetaBanner = ({ tenantCreatedAt }) => {
+  const trialDays = BETA_CONFIG.trialDays ?? 14;
+  let daysLeft = null;
+  if (tenantCreatedAt) {
+    const expiresAt = new Date(tenantCreatedAt).getTime() + trialDays * 24 * 60 * 60 * 1000;
+    daysLeft = Math.ceil((expiresAt - Date.now()) / (1000 * 60 * 60 * 24));
+  }
+
   return (
     <div className="bg-gradient-to-r from-emerald-500 via-cyan-500 to-teal-500 rounded-2xl p-4 md:p-5 text-white shadow-xl shadow-cyan-200/30 mo-card-enter">
       <div className="flex items-start gap-4">
@@ -159,6 +166,16 @@ export const BetaBanner = () => {
           <div className="mt-3 flex items-center gap-2 text-xs text-white/80">
             <MessageSquare size={14} />
             <span>Il tuo feedback è prezioso! Usa la sezione dedicata per condividere suggerimenti.</span>
+          </div>
+          <div className="mt-2 flex items-center gap-1.5 text-xs text-white/60">
+            <Clock size={12} />
+            {daysLeft !== null && daysLeft > 0 ? (
+              <span>Periodo di prova: <span className="text-white/80 font-medium">{daysLeft} giorn{daysLeft === 1 ? 'o' : 'i'} rimanent{daysLeft === 1 ? 'e' : 'i'}</span> su {trialDays}</span>
+            ) : daysLeft !== null && daysLeft <= 0 ? (
+              <span className="text-white/70">Periodo di prova terminato — contattaci per continuare</span>
+            ) : (
+              <span>Accesso gratuito per un periodo di prova limitato ({trialDays} giorni)</span>
+            )}
           </div>
         </div>
       </div>

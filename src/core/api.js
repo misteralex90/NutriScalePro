@@ -19,6 +19,7 @@ import { computeSubscriptionDates, extendSubscriptionByMonths, isSubscriptionAct
 import { loadState, saveState } from './storage.js';
 import { sendEmail } from './emailGateway.js';
 import { assertDoctorDisplayName, normalizeEmail, sanitizeFilename, slugify, uid, nowIso, addDays } from './utils.js';
+import { syncTenantPublic, syncUserAuth, remoteLoginNutritionist } from './publicStore.js';
 
 const getState = () => runSchedulers(loadState());
 
@@ -27,18 +28,27 @@ const commit = (state) => {
   return state;
 };
 
+/** Fire-and-forget sync to RTDB for cross-device access */
+const _syncTenant = (state, tenantId) => {
+  try {
+    const t = state.tenants.find((x) => x.id === tenantId);
+    const s = state.subscriptions.find((x) => x.tenantId === tenantId);
+    const u = state.users.find((x) => x.tenantId === tenantId);
+    if (t) syncTenantPublic(t, s, state.foodDatabase);
+    if (u && t) syncUserAuth(u, t, s);
+  } catch { /* ignore */ }
+};
+
+const _syncAllTenants = (state) => {
+  try {
+    const nutritionists = state.users.filter((u) => u.role === ROLES.NUTRITIONIST && u.tenantId);
+    const tenantIds = [...new Set(nutritionists.map((u) => u.tenantId))];
+    tenantIds.forEach((tenantId) => _syncTenant(state, tenantId));
+  } catch { /* ignore */ }
+};
+
 const getTenant = (state, tenantId) => state.tenants.find((tenant) => tenant.id === tenantId);
 const getSubscriptionByTenant = (state, tenantId) => state.subscriptions.find((sub) => sub.tenantId === tenantId);
-const getUserByTenant = (state, tenantId) => state.users.find((user) => user.tenantId === tenantId);
-
-const normalizeGlobalPaymentLinks = (links = []) =>
-  links
-    .map((item) => ({
-      id: item.id ?? uid('paylink'),
-      label: (item.label ?? '').trim(),
-      url: (item.url ?? '').trim(),
-    }))
-    .filter((item) => item.label && item.url);
 
 const getPromotion = (state, type) => state.promotions.find((promo) => promo.type === type && promo.active);
 
@@ -141,17 +151,43 @@ export const authApi = {
       (candidate) => candidate.role === ROLES.MASTER && candidate.email === normalizeEmail(email) && candidate.password === password
     );
     if (!user) throw new Error('Credenziali MASTER non valide');
+
+    // Opportunistically rebuild remote auth/public index for cross-device access.
+    _syncAllTenants(state);
+
     return { role: ROLES.MASTER, userId: user.id };
   },
 
-  loginNutritionist: ({ email, password }) => {
-    const state = getState();
-    const user = state.users.find(
+  loginNutritionist: async ({ email, password }) => {
+    const norm = normalizeEmail(email);
+    let state = getState();
+    let user = state.users.find(
       (candidate) =>
         candidate.role === ROLES.NUTRITIONIST &&
-        candidate.email === normalizeEmail(email) &&
+        candidate.email === norm &&
         candidate.password === password
     );
+
+    // Cross-device fallback: try RTDB if not found locally
+    if (!user) {
+      const remote = await remoteLoginNutritionist(norm, password);
+      if (!remote) throw new Error('Credenziali nutrizionista non valide');
+
+      // Import remote user/tenant/subscription into local state
+      state = getState();
+      const existsLocally = state.users.some((u) => u.id === remote.user.id);
+      if (!existsLocally) {
+        const newUsers = [...state.users, remote.user];
+        const tenantExists = state.tenants.some((t) => t.id === remote.tenant.id);
+        const newTenants = tenantExists ? state.tenants : [...state.tenants, remote.tenant];
+        const subExists = remote.subscription && state.subscriptions.some((s) => s.tenantId === remote.tenant.id);
+        const newSubs = subExists || !remote.subscription ? state.subscriptions : [...state.subscriptions, remote.subscription];
+        commit({ ...state, users: newUsers, tenants: newTenants, subscriptions: newSubs });
+        state = getState();
+      }
+      user = state.users.find((u) => u.id === remote.user.id);
+    }
+
     if (!user) throw new Error('Credenziali nutrizionista non valide');
 
     const tenant = getTenant(state, user.tenantId);
@@ -166,6 +202,9 @@ export const authApi = {
 
     const subscription = getSubscriptionByTenant(state, user.tenantId);
     const accountStatus = deriveAccountStatus(tenant, subscription);
+
+    // Ensure this user is synced to RTDB for cross-device access
+    _syncTenant(state, user.tenantId);
 
     return { role: ROLES.NUTRITIONIST, userId: user.id, tenantId: user.tenantId, accountStatus };
   },
@@ -205,8 +244,6 @@ export const signupApi = {
       displayName,
       logoUrl: '/logo.png',
       logoFilename: 'logo.png',
-      patientAccessCode: '',
-      patientWelcomeMessage: 'Benvenuto! Inserisci il codice fornito dal tuo nutrizionista per accedere al calcolatore.',
       isBlocked: false,
       accountStatus: ACCOUNT_STATUS.TRIAL_ACTIVE,
       createdAt: nowIso(),
@@ -240,7 +277,7 @@ export const signupApi = {
           id: uid('notif'),
           tenantId,
           title: 'Benvenuto! Registrazione completata',
-          body: 'Hai 2 giorni di prova gratuita. Alla scadenza sarà necessario sottoscrivere un abbonamento per continuare.',
+          body: 'Il tuo account è stato creato con successo. Benvenuto in NutriScale Pro!',
           read: false,
           createdAt: nowIso(),
           metaKey: `signup-${tenantId}`,
@@ -248,7 +285,11 @@ export const signupApi = {
         ...state.notifications,
       ],
     });
-    return { ok: true, message: 'Benvenuto! Hai 2 giorni di prova gratuita. Alla scadenza sarà necessario sottoscrivere un abbonamento per continuare.' };
+    // Sync to RTDB for cross-device access
+    const finalState = getState();
+    _syncTenant(finalState, tenantId);
+
+    return { ok: true, message: 'Benvenuto! Il tuo account è stato creato con successo.' };
   },
 };
 
@@ -269,15 +310,7 @@ export const masterApi = {
     const pendingSignups = nutritionists.filter((n) => n.accountStatus === ACCOUNT_STATUS.PENDING_APPROVAL);
     const pendingRequests = state.subscriptionRequests.filter((request) => request.status === REQUEST_STATUS.PENDING);
     const masterNotifications = state.notifications.filter((n) => n.tenantId === '__master');
-    const feedbacks = (state.feedbacks ?? []).map((item) => {
-      const tenant = getTenant(state, item.tenantId);
-      const user = getUserByTenant(state, item.tenantId);
-      return {
-        ...item,
-        nutritionistName: tenant?.displayName ?? 'Nutrizionista',
-        nutritionistEmail: user?.email ?? 'n/d',
-      };
-    });
+    const feedbacks = state.feedbacks ?? [];
 
     return {
       nutritionists,
@@ -286,27 +319,10 @@ export const masterApi = {
       pendingRequests,
       announcements: state.announcements,
       referrals: state.referrals,
-      globalPaymentLinks: state.globalPaymentLinks ?? [],
-      feedbacks,
       masterNotifications,
+      feedbacks,
       auditLog: state.auditLog ?? [],
     };
-  },
-
-  setGlobalPaymentLinks: (session, links) => {
-    assertRole(session, [ROLES.MASTER]);
-    const normalized = normalizeGlobalPaymentLinks(links);
-
-    for (const item of normalized) {
-      const isHttp = /^https?:\/\//i.test(item.url);
-      if (!isHttp) {
-        throw new Error('Ogni link pagamento deve iniziare con http:// o https://');
-      }
-    }
-
-    const state = getState();
-    commit({ ...state, globalPaymentLinks: normalized });
-    return { ok: true };
   },
 
   approveSignup: (session, tenantId) => {
@@ -343,7 +359,7 @@ export const masterApi = {
           id: uid('notif'),
           tenantId,
           title: 'Iscrizione approvata',
-          body: 'Il tuo account è stato approvato. Hai 2 giorni di prova gratuita.',
+          body: 'Il tuo account è stato approvato e attivato. Benvenuto in NutriScale Pro!',
           read: false,
           createdAt: nowIso(),
           metaKey: `approve-${tenantId}`,
@@ -363,6 +379,7 @@ export const masterApi = {
     });
 
     commit(state);
+    _syncTenant(state, tenantId);
     return { ok: true };
   },
 
@@ -460,6 +477,7 @@ export const masterApi = {
 
     state = appendAudit(state, auditEvent, session.userId, { tenantId, plan });
     commit(state);
+    _syncTenant(state, tenantId);
     return { ok: true };
   },
 
@@ -480,8 +498,6 @@ export const masterApi = {
       displayName: input.displayName,
       logoUrl: '/logo.png',
       logoFilename: 'logo.png',
-      patientAccessCode: '',
-      patientWelcomeMessage: 'Benvenuto! Inserisci il codice fornito dal tuo nutrizionista per accedere al calcolatore.',
       isBlocked: false,
       accountStatus: ACCOUNT_STATUS.ACTIVE,
       createdAt: nowIso(),
@@ -504,16 +520,17 @@ export const masterApi = {
       status: 'pending',
       startAt,
       endAt,
-      renewalUrl: '',
+      renewalUrl: input.renewalUrl ?? '',
       updatedAt: new Date().toISOString(),
     };
 
-    commit({
+    const finalState = commit({
       ...state,
       users: [...state.users, user],
       tenants: [...state.tenants, tenant],
       subscriptions: [...state.subscriptions, subscription],
     });
+    _syncTenant(finalState, tenantId);
 
     return { user, tenant, subscription };
   },
@@ -756,43 +773,12 @@ export const nutritionistApi = {
       referrals,
       notifications,
       promotions: { slotsPromo, freeMonthPromo },
-      globalPaymentLinks: state.globalPaymentLinks ?? [],
       publicUrl: `${window.location.origin}/n/${tenant.slug}`,
       currentPrices: {
         month1: resolvePlanPrice(state, PLAN.MONTH_1),
         month12: resolvePlanPrice(state, PLAN.MONTH_12),
       },
     };
-  },
-
-  updatePatientAccessSettings: (session, { accessCode, welcomeMessage }) => {
-    assertRole(session, [ROLES.NUTRITIONIST]);
-    let state = getState();
-
-    const normalizedCode = (accessCode ?? '').trim();
-    const normalizedWelcome = (welcomeMessage ?? '').trim();
-
-    if (normalizedCode && normalizedCode.length < 4) {
-      throw new Error('Il codice paziente deve avere almeno 4 caratteri.');
-    }
-
-    state = {
-      ...state,
-      tenants: state.tenants.map((tenant) =>
-        tenant.id === session.tenantId
-          ? {
-              ...tenant,
-              patientAccessCode: normalizedCode,
-              patientWelcomeMessage:
-                normalizedWelcome ||
-                'Benvenuto! Inserisci il codice fornito dal tuo nutrizionista per accedere al calcolatore.',
-            }
-          : tenant
-      ),
-    };
-
-    commit(state);
-    return { ok: true };
   },
 
   updateBranding: (session, { displayName, logo }) => {
@@ -837,6 +823,7 @@ export const nutritionistApi = {
     };
 
     commit(state);
+    _syncTenant(state, session.tenantId);
     return { ok: true };
   },
 
@@ -873,6 +860,7 @@ export const nutritionistApi = {
       plan: payload.plan,
       status: REQUEST_STATUS.PENDING,
       billing: payload.billing,
+      paymentLink: payload.paymentLink ?? '',
       notes: payload.notes ?? '',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -880,44 +868,6 @@ export const nutritionistApi = {
 
     commit({ ...state, subscriptionRequests: [request, ...state.subscriptionRequests] });
     return request;
-  },
-
-  submitFeedback: (session, payload) => {
-    assertRole(session, [ROLES.NUTRITIONIST]);
-    const subject = (payload?.subject ?? '').trim();
-    const body = (payload?.body ?? '').trim();
-    if (!subject || !body) {
-      throw new Error('Inserisci oggetto e descrizione del feedback.');
-    }
-
-    const state = getState();
-    const feedback = {
-      id: uid('fb'),
-      tenantId: session.tenantId,
-      subject,
-      body,
-      createdAt: nowIso(),
-      status: 'open',
-    };
-
-    commit({
-      ...state,
-      feedbacks: [feedback, ...(state.feedbacks ?? [])],
-      notifications: [
-        {
-          id: uid('notif'),
-          tenantId: '__master',
-          title: 'Nuovo feedback nutrizionista',
-          body: subject,
-          read: false,
-          createdAt: nowIso(),
-          metaKey: `feedback-${feedback.id}`,
-        },
-        ...state.notifications,
-      ],
-    });
-
-    return feedback;
   },
 
   markNotificationRead: (session, notificationId) => {
@@ -929,6 +879,40 @@ export const nutritionistApi = {
         : item
     );
     commit({ ...state, notifications });
+    return { ok: true };
+  },
+
+  submitFeedback: (session, { subject, body }) => {
+    assertRole(session, [ROLES.NUTRITIONIST]);
+    if (!subject || !body) throw new Error('Oggetto e messaggio sono obbligatori.');
+    const state = getState();
+    const user = state.users.find((u) => u.id === session.userId);
+    const tenant = getTenant(state, session.tenantId);
+    const feedback = {
+      id: uid('fb'),
+      tenantId: session.tenantId,
+      nutritionistName: tenant?.displayName ?? user?.name ?? '',
+      nutritionistEmail: user?.email ?? '',
+      subject,
+      body,
+      createdAt: nowIso(),
+    };
+    commit({
+      ...state,
+      feedbacks: [feedback, ...(state.feedbacks ?? [])],
+      notifications: [
+        {
+          id: uid('notif'),
+          tenantId: '__master',
+          title: `Feedback da ${feedback.nutritionistName}`,
+          body: subject,
+          read: false,
+          createdAt: nowIso(),
+          metaKey: `feedback-${feedback.id}`,
+        },
+        ...state.notifications,
+      ],
+    });
     return { ok: true };
   },
 };
@@ -952,26 +936,10 @@ export const publicApi = {
     return {
       tenant: { displayName: tenant.displayName, slug: tenant.slug, logoUrl: tenant.logoUrl },
       isAccessActive: active,
-      requiresPatientCode: Boolean(tenant.patientAccessCode),
-      patientWelcomeMessage:
-        tenant.patientWelcomeMessage ||
-        'Benvenuto! Inserisci il codice fornito dal tuo nutrizionista per accedere al calcolatore.',
-      globalPaymentLinks: state.globalPaymentLinks ?? [],
       foodDatabase: state.foodDatabase,
       renewalUrl: subscription?.renewalUrl ?? '',
       blockReason: '',
     };
-  },
-
-  verifyPatientAccessCode: (slug, code) => {
-    const state = getState();
-    const tenant = state.tenants.find((item) => item.slug === slug);
-    if (!tenant) throw new Error('Nutrizionista non trovato');
-    if (!tenant.patientAccessCode) return { ok: true };
-    if ((code ?? '').trim() !== tenant.patientAccessCode) {
-      throw new Error('Codice di accesso non valido.');
-    }
-    return { ok: true };
   },
 };
 

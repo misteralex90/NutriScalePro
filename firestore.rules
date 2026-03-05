@@ -1,0 +1,122 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper: controlla se utente è autenticato
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper: controlla se è MASTER
+    function isMaster() {
+      return isAuthenticated() && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'MASTER';
+    }
+    
+    // Helper: controlla se utente è proprietario del tenant
+    function isTenantOwner(tenantId) {
+      return isAuthenticated() && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.tenantId == tenantId;
+    }
+    
+    // Helper: controlla se utente ha accesso al tenant
+    function hasTenantAccess(tenantId) {
+      return isTenantOwner(tenantId) || isMaster();
+    }
+
+    // COLLECTION: users
+    match /users/{userId} {
+      // Lettura: solo se stesso o master
+      allow read: if isAuthenticated() && 
+        (request.auth.uid == userId || isMaster());
+      
+      // Scrittura: solo se stesso durante signup, o master
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && 
+        (request.auth.uid == userId || isMaster());
+      allow delete: if isMaster();
+    }
+
+    // COLLECTION: tenants
+    match /tenants/{tenantId} {
+      // Lettura: proprietario o master
+      allow read: if isAuthenticated() && hasTenantAccess(tenantId);
+      
+      // Creazione: solo utenti autenticati (durante signup)
+      allow create: if isAuthenticated();
+      
+      // Aggiornamento: proprietario o master
+      allow update: if isAuthenticated() && hasTenantAccess(tenantId);
+      
+      // Cancellazione: solo master
+      allow delete: if isMaster();
+    }
+
+    // COLLECTION: subscriptions
+    match /subscriptions/{subscriptionId} {
+      // Lettura: se il tenant appartiene all'utente
+      allow read: if isAuthenticated() && 
+        hasTenantAccess(resource.data.tenantId);
+      
+      // Creazione: utente autenticato (durante signup)
+      allow create: if isAuthenticated();
+      
+      // Update/Delete: solo master
+      allow update, delete: if isMaster();
+    }
+
+    // COLLECTION: notifications
+    match /notifications/{notificationId} {
+      // Lettura: se la notifica è per il tenant dell'utente
+      allow read: if isAuthenticated() && 
+        (resource.data.tenantId == request.auth.uid || 
+         isTenantOwner(resource.data.tenantId) ||
+         (resource.data.tenantId == '__master' && isMaster()));
+      
+      // Creazione: utente autenticato (signup + sistema)
+      allow create: if isAuthenticated();
+      
+      // Update/Delete: master o proprietario
+      allow update: if isAuthenticated() && 
+        (isMaster() || isTenantOwner(resource.data.tenantId));
+      allow delete: if isMaster();
+    }
+
+    // COLLECTION: referrals
+    match /referrals/{referralId} {
+      // Lettura/Scrittura: solo proprietario del tenant
+      allow read, write: if isAuthenticated() && 
+        isTenantOwner(resource.data.tenantId);
+    }
+
+    // COLLECTION: subscriptionRequests
+    match /subscriptionRequests/{requestId} {
+      // Lettura: master o proprietario
+      allow read: if isAuthenticated() && 
+        (isMaster() || isTenantOwner(resource.data.tenantId));
+      
+      // Creazione: proprietario del tenant
+      allow create: if isAuthenticated() && 
+        isTenantOwner(request.resource.data.tenantId);
+      
+      // Update: solo master
+      allow update: if isMaster();
+    }
+
+    // COLLECTION: feedback
+    match /feedback/{feedbackId} {
+      // Lettura: solo master
+      allow read: if isMaster();
+      
+      // Creazione: qualsiasi utente autenticato (proprio tenant)
+      allow create: if isAuthenticated() && 
+        isTenantOwner(request.resource.data.tenantId);
+    }
+
+    // COLLECTION: promotions (solo master)
+    match /promotions/{promoId} {
+      allow read: if isAuthenticated();
+      allow write: if isMaster();
+    }
+  }
+}

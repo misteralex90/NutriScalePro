@@ -12,3 +12,4 @@ export { ToastProvider, useToast } from './Toast';
 export { default as Tooltip } from './Tooltip';
 export { default as Drawer } from './Drawer';
 export { useMotion, useFocusTrap, useEscapeKey, useClickOutside } from './useMotion';
+export { BetaBadge, BetaBanner, BetaOverlay } from './BetaComponents';
