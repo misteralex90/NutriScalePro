@@ -169,6 +169,98 @@ export const FOOD_DATABASE = [
   { name: 'Albicocche secche', category: 'Frutta', factors: { ammollate: 2.2, composta: 2.0 } },
   { name: 'Fichi secchi', category: 'Frutta', factors: { ammollati: 1.8 } },
   { name: 'Uvetta', category: 'Frutta', factors: { ammollata: 1.5 } },
+
+  // ═══════════════════════════════════════════════════════════
+  // CEREALI, PANE E FORNO
+  // ═══════════════════════════════════════════════════════════
+  { name: 'Pane bianco', category: 'Cereali e Pasta', factors: { tostato: 0.90, bruschetta: 0.88, piastra: 0.92 } },
+  { name: 'Pane integrale', category: 'Cereali e Pasta', factors: { tostato: 0.92, bruschetta: 0.90, piastra: 0.94 } },
+  { name: 'Pane di segale', category: 'Cereali e Pasta', factors: { tostato: 0.93, bruschetta: 0.91 } },
+  { name: 'Focaccia', category: 'Cereali e Pasta', factors: { forno: 0.88, piastra: 0.90 } },
+  { name: 'Piadina', category: 'Cereali e Pasta', factors: { piastra: 0.92, forno: 0.90 } },
+  { name: 'Pizza impasto', category: 'Cereali e Pasta', factors: { forno: 0.85, teglia: 0.87 } },
+  { name: 'Lasagne secche', category: 'Cereali e Pasta', factors: { forno: 2.2, bollite: 2.0 } },
+  { name: 'Crespelle', category: 'Cereali e Pasta', factors: { padella: 0.95, forno: 0.90 } },
+  { name: 'Semolino', category: 'Cereali e Pasta', factors: { crema: 4.0, gnocchi: 2.6 } },
+  { name: 'Riso per sushi', category: 'Cereali e Pasta', factors: { bollito: 2.4, assorbimento: 2.6 } },
+  { name: 'Riso jasmine', category: 'Cereali e Pasta', factors: { bollito: 2.3, pilaf: 2.5 } },
+  { name: 'Riso parboiled', category: 'Cereali e Pasta', factors: { bollito: 2.2, pilaf: 2.4 } },
+  { name: 'Noodles secchi', category: 'Cereali e Pasta', factors: { bolliti: 2.3, saltati: 2.0 } },
+  { name: 'Spaghetti di riso secchi', category: 'Cereali e Pasta', factors: { bolliti: 2.5, wok: 2.2 } },
+
+  // ═══════════════════════════════════════════════════════════
+  // CARNE BIANCA E ROSSA AGGIUNTIVE
+  // ═══════════════════════════════════════════════════════════
+  { name: 'Pollo sovracoscia', category: 'Carne Bianca', factors: { forno: 0.68, piastra: 0.72, padella: 0.70 } },
+  { name: 'Pollo intero', category: 'Carne Bianca', factors: { arrosto: 0.67, forno: 0.69, bollito: 0.82 } },
+  { name: 'Tacchino arrosto', category: 'Carne Bianca', factors: { arrosto: 0.70, piastra: 0.74 } },
+  { name: 'Coniglio disossato', category: 'Carne Bianca', factors: { forno: 0.68, brasato: 0.72, padella: 0.70 } },
+  { name: 'Hamburger di manzo', category: 'Carne Rossa', factors: { piastra: 0.78, padella: 0.75, forno: 0.80 } },
+  { name: 'Bresaola', category: 'Carne Rossa', factors: { naturale: 1.0, piastra: 0.95 } },
+  { name: 'Roastbeef', category: 'Carne Rossa', factors: { arrosto: 0.72, padella: 0.75 } },
+  { name: 'Salsiccia fresca', category: 'Carne Rossa', factors: { piastra: 0.70, forno: 0.68, padella: 0.72 } },
+  { name: 'Spezzatino di manzo', category: 'Carne Rossa', factors: { stufato: 0.65, brasato: 0.62 } },
+  { name: 'Fegato bovino', category: 'Carne Rossa', factors: { padella: 0.78, piastra: 0.75 } },
+
+  // ═══════════════════════════════════════════════════════════
+  // PESCE AGGIUNTIVO
+  // ═══════════════════════════════════════════════════════════
+  { name: 'Nasello', category: 'Pesce', factors: { vapore: 0.88, forno: 0.80, bollito: 0.86 } },
+  { name: 'Cernia', category: 'Pesce', factors: { forno: 0.78, piastra: 0.75, vapore: 0.86 } },
+  { name: 'Ricciola', category: 'Pesce', factors: { piastra: 0.80, forno: 0.77, crudo: 1.0 } },
+  { name: 'Spigola', category: 'Pesce', factors: { forno: 0.75, piastra: 0.72, vapore: 0.85 } },
+  { name: 'Palamita', category: 'Pesce', factors: { piastra: 0.78, forno: 0.75, umido: 0.82 } },
+  { name: 'Cefalo', category: 'Pesce', factors: { forno: 0.76, piastra: 0.73, vapore: 0.84 } },
+  { name: 'Totani', category: 'Frutti di Mare', factors: { piastra: 0.68, padella: 0.72, fritti: 0.62 } },
+  { name: 'Moscardini', category: 'Frutti di Mare', factors: { umido: 0.60, piastra: 0.55, bolliti: 0.65 } },
+
+  // ═══════════════════════════════════════════════════════════
+  // LEGUMI E PROTEINE VEGETALI AGGIUNTIVE
+  // ═══════════════════════════════════════════════════════════
+  { name: 'Ceci cotti', category: 'Legumi', factors: { saltati: 0.95, umido: 1.05, forno: 0.90 } },
+  { name: 'Lenticchie cotte', category: 'Legumi', factors: { umido: 1.05, saltate: 0.95, zuppa: 1.15 } },
+  { name: 'Fagioli cannellini cotti', category: 'Legumi', factors: { umido: 1.05, saltati: 0.95, crema: 1.10 } },
+  { name: 'Fagioli borlotti cotti', category: 'Legumi', factors: { umido: 1.05, saltati: 0.95, crema: 1.10 } },
+  { name: 'Edamame', category: 'Legumi', factors: { bolliti: 1.05, vapore: 1.02, saltati: 0.95 } },
+  { name: 'Burger vegetale', category: 'Proteine Vegetali', factors: { piastra: 0.88, forno: 0.85, padella: 0.90 } },
+
+  // ═══════════════════════════════════════════════════════════
+  // VERDURE AGGIUNTIVE COMUNI
+  // ═══════════════════════════════════════════════════════════
+  { name: 'Pomodorini', category: 'Verdure', factors: { forno: 0.65, padella: 0.72, crudi: 1.0 } },
+  { name: 'Lattuga', category: 'Verdure', factors: { cruda: 1.0, grigliata: 0.85 } },
+  { name: 'Radicchio', category: 'Verdure', factors: { piastra: 0.72, forno: 0.68, crudo: 1.0 } },
+  { name: 'Rucola', category: 'Verdure', factors: { cruda: 1.0, saltata: 0.70 } },
+  { name: 'Cetrioli', category: 'Verdure', factors: { crudi: 1.0, agrodolce: 0.95 } },
+  { name: 'Melanzane a cubetti', category: 'Verdure', factors: { forno: 0.45, padella: 0.50, fritte: 0.36 } },
+  { name: 'Zucchine a rondelle', category: 'Verdure', factors: { padella: 0.62, forno: 0.55, vapore: 0.86 } },
+  { name: 'Peperoni a listarelle', category: 'Verdure', factors: { padella: 0.62, forno: 0.58, griglia: 0.55 } },
+  { name: 'Patate novelle', category: 'Tuberi', factors: { forno: 0.82, bollite: 0.98, vapore: 0.95 } },
+  { name: 'Purea di patate in fiocchi', category: 'Tuberi', factors: { reidratata: 4.5 } },
+  { name: 'Mais in chicchi', category: 'Verdure', factors: { bollito: 1.05, piastra: 0.95, vapore: 1.02 } },
+  { name: 'Piselli surgelati', category: 'Verdure', factors: { bolliti: 1.0, padella: 0.92, vapore: 0.98 } },
+  { name: 'Cime di cavolfiore', category: 'Verdure', factors: { vapore: 0.86, forno: 0.68, bollite: 0.82 } },
+  { name: 'Broccoletti', category: 'Verdure', factors: { vapore: 0.82, bolliti: 0.78, padella: 0.72 } },
+
+  // ═══════════════════════════════════════════════════════════
+  // UOVA, LATTICINI, PREPARAZIONI
+  // ═══════════════════════════════════════════════════════════
+  { name: 'Frittata', category: 'Uova', factors: { padella: 0.85, forno: 0.88 } },
+  { name: 'Omelette', category: 'Uova', factors: { padella: 0.88, forno: 0.90 } },
+  { name: 'Mozzarella', category: 'Latticini', factors: { forno: 0.85, piastra: 0.82, cruda: 1.0 } },
+  { name: 'Ricotta', category: 'Latticini', factors: { forno: 0.92, padella: 0.88, cruda: 1.0 } },
+  { name: 'Besciamella', category: 'Cereali e Pasta', factors: { ridotta: 0.85, gratinata: 0.80 } },
+  { name: 'Passata di pomodoro', category: 'Verdure', factors: { ridotta: 0.65, sugo: 0.75, cruda: 1.0 } },
+
+  // ═══════════════════════════════════════════════════════════
+  // FRUTTA E PREPARAZIONI DOLCI AGGIUNTIVE
+  // ═══════════════════════════════════════════════════════════
+  { name: 'Banane', category: 'Frutta', factors: { forno: 0.82, piastra: 0.88, crude: 1.0 } },
+  { name: 'Fragole', category: 'Frutta', factors: { composta: 0.70, crude: 1.0 } },
+  { name: 'Frutti di bosco', category: 'Frutta', factors: { composta: 0.68, crudi: 1.0 } },
+  { name: 'Mirtilli', category: 'Frutta', factors: { composta: 0.72, crudi: 1.0 } },
+  { name: 'Pera cotta', category: 'Frutta', factors: { forno: 0.78, sciroppata: 1.1 } },
+  { name: 'Mela cotta', category: 'Frutta', factors: { forno: 0.78, sciroppata: 1.1 } },
 ];
 
 export const convertWeight = ({ weight, factor, rawToCooked }) => {
@@ -178,7 +270,43 @@ export const convertWeight = ({ weight, factor, rawToCooked }) => {
 
 // Helper per capitalizzare il metodo di cottura
 export const formatMethod = (method) => {
-  return method
+  const labels = {
+    pentola_pressione: 'Pentola a pressione',
+    assorbimento: 'Assorbimento',
+    crudo: 'Crudo',
+    cruda: 'Cruda',
+    crudi: 'Crudi',
+    crude: 'Crude',
+    bollito: 'Bollito',
+    bollita: 'Bollita',
+    bolliti: 'Bolliti',
+    bollite: 'Bollite',
+    saltato: 'Saltato',
+    saltata: 'Saltata',
+    saltati: 'Saltati',
+    saltate: 'Saltate',
+    trifolato: 'Trifolato',
+    trifolata: 'Trifolata',
+    trifolati: 'Trifolati',
+    trifolate: 'Trifolate',
+    brasato: 'Brasato',
+    brasata: 'Brasata',
+    brasati: 'Brasati',
+    brasate: 'Brasate',
+    fritto: 'Fritto',
+    fritta: 'Fritta',
+    fritti: 'Fritti',
+    fritte: 'Fritte',
+    wok: 'Wok',
+    pilaf: 'Pilaf',
+    tataki: 'Tataki',
+  };
+
+  const key = String(method || '').trim().toLowerCase();
+  if (!key) return '';
+  if (labels[key]) return labels[key];
+
+  return key
     .replace(/_/g, ' ')
-    .replace(/^\w/, c => c.toUpperCase());
+    .replace(/^\w/, (c) => c.toUpperCase());
 };

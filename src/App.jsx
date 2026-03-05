@@ -45,7 +45,7 @@ import {
   REQUEST_STATUS,
   ROLES,
 } from './core/constants';
-import { convertWeight } from './core/foodDatabase';
+import { convertWeight, formatMethod } from './core/foodDatabase';
 import { formatDate, isValidDoctorDisplayName } from './core/utils';
 import { requestSubscription } from './core/subscriptionRequest';
 
@@ -98,10 +98,10 @@ const Badge = ({ children, variant = 'default' }) => {
 };
 
 const Card = ({ title, icon, children, actions }) => (
-  <section className="bg-white border border-slate-200 rounded-2xl p-4 md:p-5 shadow-sm hover:shadow-md hover:border-slate-300">
-    <div className="flex items-center justify-between gap-3 mb-4">
-      <h3 className="font-bold text-slate-800 flex items-center gap-2">{icon}{title}</h3>
-      <div>{actions}</div>
+  <section className="w-full min-w-0 bg-white border border-slate-200 rounded-2xl p-4 md:p-5 shadow-sm hover:shadow-md hover:border-slate-300 overflow-x-hidden">
+    <div className="flex flex-wrap items-center justify-between gap-3 mb-4 min-w-0">
+      <h3 className="font-bold text-slate-800 flex items-center gap-2 min-w-0 break-words">{icon}{title}</h3>
+      {actions ? <div className="min-w-0">{actions}</div> : null}
     </div>
     {children}
   </section>
@@ -217,6 +217,7 @@ const PublicConverter = ({ slug }) => {
   const [weight, setWeight] = useState(100);
   const [rawToCooked, setRawToCooked] = useState(true);
   const [query, setQuery] = useState('');
+  const [selectedMethods, setSelectedMethods] = useState({});
 
   useEffect(() => {
     let cancelled = false;
@@ -282,11 +283,15 @@ const PublicConverter = ({ slug }) => {
         </div>
       </header>
       <main className="max-w-3xl mx-auto p-4 md:p-6 space-y-4">
-        <Card title="Calcolatore" icon={<RefreshCw size={17} />}>
+        <Card title="Convertitore Crudo/Cotto" icon={<RefreshCw size={17} />}>
           <div className="grid md:grid-cols-3 gap-3">
             <input type="number" min="0" value={weight} onChange={(event) => setWeight(Number(event.target.value || 0))} className={inputStyle} />
             <button onClick={() => setRawToCooked(true)} className={`rounded-xl py-2.5 font-semibold border ${rawToCooked ? 'bg-cyan-900 text-white border-cyan-900' : 'bg-white border-slate-300'}`}>Crudo → Cotto</button>
             <button onClick={() => setRawToCooked(false)} className={`rounded-xl py-2.5 font-semibold border ${!rawToCooked ? 'bg-cyan-900 text-white border-cyan-900' : 'bg-white border-slate-300'}`}>Cotto → Crudo</button>
+          </div>
+          <div className="mt-4 rounded-2xl border border-cyan-200 bg-gradient-to-r from-cyan-50 to-emerald-50 p-4 text-center">
+            <p className="text-xs uppercase tracking-wider text-cyan-700 font-semibold">Quantita di riferimento</p>
+            <p className="text-3xl font-black text-cyan-900 leading-none mt-1">{weight} <span className="text-base font-semibold text-cyan-700">grammi</span></p>
           </div>
           <div className="mt-3 relative">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -295,26 +300,41 @@ const PublicConverter = ({ slug }) => {
         </Card>
 
         <div className="space-y-3">
-          {filtered.map((food) => (
-            <div key={food.name} className="bg-white border border-slate-200 rounded-xl p-4">
+          {filtered.map((food) => {
+            const methods = Object.keys(food.factors || {});
+            const defaultMethod = methods[0] ?? null;
+            const selectedMethod = selectedMethods[food.name] ?? defaultMethod;
+            const selectedFactor = selectedMethod ? food.factors[selectedMethod] : null;
+            const result = convertWeight({ weight, factor: selectedFactor, rawToCooked });
+
+            return (
+            <div key={`${food.name}-${food.category}`} className="bg-white border border-slate-200 rounded-xl p-4">
               <div className="flex justify-between items-center gap-3">
                 <div>
                   <h4 className="font-bold">{food.name}</h4>
                   <p className="text-xs text-slate-500">{food.category}</p>
                 </div>
-                <div className="text-right">
-                  <div className="text-sm text-slate-500">Risultato</div>
-                  <div className="text-2xl font-black text-cyan-900">{convertWeight({ weight, factor: food.factors[Object.keys(food.factors)[0]], rawToCooked })}g</div>
+                <div className="text-center min-w-[130px] rounded-xl border border-cyan-100 bg-cyan-50/70 px-3 py-2">
+                  <div className="text-xs text-cyan-700 font-semibold uppercase tracking-wide">Risultato</div>
+                  <div className="text-2xl font-black text-cyan-900 leading-none mt-1">{result}</div>
+                  <div className="text-[11px] text-cyan-700 font-medium mt-0.5">grammi</div>
                 </div>
               </div>
               <div className="flex gap-2 mt-3 flex-wrap">
-                {Object.entries(food.factors).map(([method, factor]) => (
-                  <span key={method} className="text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-700">{method}: x{factor}</span>
+                {methods.map((method) => (
+                  <button
+                    key={method}
+                    type="button"
+                    onClick={() => setSelectedMethods((prev) => ({ ...prev, [food.name]: method }))}
+                    className={`text-xs px-2.5 py-1.5 rounded-full border transition-colors ${selectedMethod === method ? 'bg-cyan-900 text-white border-cyan-900' : 'bg-slate-50 text-slate-700 border-slate-200 hover:border-cyan-300'}`}
+                  >
+                    {formatMethod(method)}
+                  </button>
                 ))}
               </div>
               {food.tip && <p className="text-xs text-amber-700 bg-amber-50 mt-3 p-2 rounded-lg">{food.tip}</p>}
             </div>
-          ))}
+          );})}
         </div>
       </main>
     </div>
@@ -757,7 +777,7 @@ const NutritionistDashboard = ({ session, onLogout }) => {
     };
 
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 mo-page-enter">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 md:p-6 mo-page-enter overflow-x-hidden">
         <div className="max-w-md w-full bg-white border border-slate-200 rounded-2xl p-8 text-center shadow-sm mo-card-enter">
           <div className="flex justify-center mb-4">{gate.icon}</div>
           <h2 className="text-xl font-bold text-slate-800">{gate.title}</h2>
@@ -766,7 +786,7 @@ const NutritionistDashboard = ({ session, onLogout }) => {
           {data.tenant && (
             <div className="mt-5 bg-slate-50 rounded-xl p-3 text-sm text-left">
               <p className="text-slate-600"><strong>Profilo:</strong> {data.tenant.displayName}</p>
-              <p className="text-slate-500 text-xs mt-1">Link pazienti: <span className="font-mono text-slate-400">{data.publicUrl}</span></p>
+              <p className="text-slate-500 text-xs mt-1">Link pazienti: <span className="font-mono text-slate-400 break-all">{data.publicUrl}</span></p>
               <p className="text-[11px] text-amber-600 mt-1 flex items-center gap-1"><Lock size={11} /> Il link sarà attivo con l'abbonamento</p>
             </div>
           )}
@@ -774,7 +794,7 @@ const NutritionistDashboard = ({ session, onLogout }) => {
           {data.notifications.length > 0 && (
             <div className="mt-5 text-left">
               <p className="text-xs font-semibold text-slate-500 mb-2">Notifiche</p>
-              <div className="space-y-1.5 max-h-40 overflow-auto">
+              <div className="space-y-1.5 max-h-none overflow-visible md:max-h-40 md:overflow-auto">
                 {data.notifications.map((n) => (
                   <div key={n.id} className="border border-slate-200 rounded-lg p-2 text-xs">
                     <p className="font-semibold text-slate-700">{n.title}</p>
@@ -800,22 +820,22 @@ const NutritionistDashboard = ({ session, onLogout }) => {
   /* ── Shared header ── */
   const dashboardHeader = (
     <>
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl md:text-2xl font-black text-cyan-900 flex items-center gap-2">
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl md:text-2xl font-black text-cyan-900 flex flex-wrap items-center gap-2">
             {dashboardView === 'main' ? 'La tua area riservata' : 'Gestione Abbonamento'} {BETA_MODE && <BetaBadge />}
           </h1>
-          <p className="text-sm text-slate-500">{data.tenant.displayName}</p>
+          <p className="text-sm text-slate-500 break-words">{data.tenant.displayName}</p>
         </div>
-        <button onClick={onLogout} className={`${btnPrimary} flex items-center gap-1`}><LogOut size={14} /> Esci</button>
+        <button onClick={onLogout} className={`${btnPrimary} w-full sm:w-auto justify-center flex items-center gap-1`}><LogOut size={14} /> Esci</button>
       </div>
       {BETA_MODE && <BetaBanner tenantCreatedAt={data.subscription?.startAt} />}
       {/* Tab di navigazione */}
-      <div className="flex gap-2 justify-center">
-        <button onClick={() => setDashboardView('main')} className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 ${dashboardView === 'main' ? 'bg-cyan-900 text-white shadow-sm' : 'bg-white text-slate-500 border border-slate-200 hover:border-cyan-300 hover:text-cyan-700'}`}>
+      <div className="flex gap-2 justify-center flex-wrap w-full">
+        <button onClick={() => setDashboardView('main')} className={`min-w-0 flex-1 sm:flex-none px-4 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 ${dashboardView === 'main' ? 'bg-cyan-900 text-white shadow-sm' : 'bg-white text-slate-500 border border-slate-200 hover:border-cyan-300 hover:text-cyan-700'}`}>
           <span className="inline-flex items-center gap-1.5"><Users size={12} /> Area riservata</span>
         </button>
-        <button onClick={() => setDashboardView('subscription')} className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 ${dashboardView === 'subscription' ? 'bg-cyan-900 text-white shadow-sm' : 'bg-white text-slate-500 border border-slate-200 hover:border-cyan-300 hover:text-cyan-700'}`}>
+        <button onClick={() => setDashboardView('subscription')} className={`min-w-0 flex-1 sm:flex-none px-4 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 ${dashboardView === 'subscription' ? 'bg-cyan-900 text-white shadow-sm' : 'bg-white text-slate-500 border border-slate-200 hover:border-cyan-300 hover:text-cyan-700'}`}>
           <span className="inline-flex items-center gap-1.5"><Calendar size={12} /> Abbonamento</span>
         </button>
       </div>
@@ -827,12 +847,13 @@ const NutritionistDashboard = ({ session, onLogout }) => {
      ══════════════════════════════════════════════════════════ */
   if (dashboardView === 'main') {
     return (
-      <div className="min-h-screen bg-slate-50 p-4 md:p-6 mo-page-enter">
+      <div className="min-h-screen bg-slate-50 p-4 md:p-6 mo-page-enter overflow-x-hidden">
         <div className="max-w-6xl mx-auto space-y-4">
           {dashboardHeader}
 
           <div className="grid lg:grid-cols-2 gap-4">
             {/* Profilo e gestione pazienti */}
+            <div className="min-w-0">
             <Card title="Il tuo profilo" icon={<Users size={16} />}>
               <div className="space-y-3">
                 <img src={data.tenant.logoUrl || '/logo.png'} alt="Logo" className="h-16 w-16 rounded-xl object-cover border border-slate-200" />
@@ -871,7 +892,7 @@ const NutritionistDashboard = ({ session, onLogout }) => {
                     }} />
                     <div className="flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-dashed border-slate-300 hover:border-cyan-400 hover:bg-cyan-50/30 transition-all duration-200 cursor-pointer">
                       <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-cyan-100 text-cyan-700"><Plus size={18} /></div>
-                      <div>
+                      <div className="min-w-0">
                         <p className="text-sm font-semibold text-slate-700">Scegli file</p>
                         <p className="text-[11px] text-slate-400">PNG, JPEG o WEBP · max 1MB</p>
                       </div>
@@ -880,15 +901,15 @@ const NutritionistDashboard = ({ session, onLogout }) => {
                 </label>
 
                 <div className="group relative rounded-2xl bg-gradient-to-r from-cyan-50/80 to-slate-50 border border-cyan-200/60 p-4">
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-cyan-100 text-cyan-700 shrink-0"><Globe size={18} /></div>
                       <div className="min-w-0">
                         <p className="text-xs font-semibold text-cyan-800 uppercase tracking-wider">Link pubblico pazienti</p>
-                        <p className="text-sm text-slate-600 truncate mt-0.5 font-mono">{data.publicUrl}</p>
+                        <p className="text-sm text-slate-600 break-all mt-0.5 font-mono">{data.publicUrl}</p>
                       </div>
                     </div>
-                    <button className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-cyan-900 text-white text-xs font-semibold hover:bg-cyan-800 active:scale-[0.97] shadow-sm transition-all duration-150" onClick={() => { navigator.clipboard?.writeText(data.publicUrl); setMessage('Link copiato negli appunti.'); setTimeout(() => setMessage(''), 2000); }}>
+                    <button className="shrink-0 w-full sm:w-auto justify-center inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-cyan-900 text-white text-xs font-semibold hover:bg-cyan-800 active:scale-[0.97] shadow-sm transition-all duration-150" onClick={() => { navigator.clipboard?.writeText(data.publicUrl); setMessage('Link copiato negli appunti.'); setTimeout(() => setMessage(''), 2000); }}>
                       <Copy size={13} /> Copia
                     </button>
                   </div>
@@ -900,11 +921,13 @@ const NutritionistDashboard = ({ session, onLogout }) => {
                 </div>
               </div>
             </Card>
+            </div>
 
             {/* Feedback e suggerimenti */}
+            <div className="min-w-0">
             <Card title="Feedback e suggerimenti" icon={<MessageSquare size={16} />}>
-              <div className="space-y-3">
-                <p className="text-sm text-slate-500 leading-relaxed">
+              <div className="space-y-3 min-w-0">
+                <p className="text-sm text-slate-500 leading-relaxed break-words">
                   La tua opinione è preziosa per migliorare NutriScale Pro. Condividi suggerimenti, segnala problemi o proponi nuove funzionalità.
                 </p>
                 <input className={inputStyle} placeholder="Oggetto del messaggio" value={feedbackSubject} onChange={(e) => setFeedbackSubject(e.target.value)} />
@@ -924,6 +947,7 @@ const NutritionistDashboard = ({ session, onLogout }) => {
                 </button>
               </div>
             </Card>
+            </div>
           </div>
 
           {message && <p className="text-sm text-emerald-700 bg-emerald-50 rounded-xl p-3">{message}</p>}
@@ -937,7 +961,7 @@ const NutritionistDashboard = ({ session, onLogout }) => {
      VIEW: SUBSCRIPTION — Abbonamento (Work in Progress)
      ══════════════════════════════════════════════════════════ */
   return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-6 mo-page-enter">
+    <div className="min-h-screen bg-slate-50 p-4 md:p-6 mo-page-enter overflow-x-hidden">
       <div className="max-w-6xl mx-auto space-y-4">
         {dashboardHeader}
 
@@ -979,10 +1003,10 @@ const NutritionistDashboard = ({ session, onLogout }) => {
                       try { nutritionistApi.addReferral(session, referral); setReferral({ firstName: '', lastName: '', email: '' }); setMessage('Referral inserito correttamente.'); refresh(); } catch (refError) { setError(refError.message); }
                     }}>Inserisci</button>
                   </div>
-                  <div className="space-y-1 max-h-40 overflow-auto pr-1">
+                  <div className="space-y-1 max-h-none overflow-visible md:max-h-40 md:overflow-auto pr-1">
                     {data.referrals.map((item) => (
-                      <div key={item.id} className="border border-slate-200 rounded-lg p-2 flex items-center justify-between">
-                        <span className="text-xs">{item.firstName} {item.lastName} · {item.email}</span>
+                      <div key={item.id} className="border border-slate-200 rounded-lg p-2 flex items-center justify-between gap-2">
+                        <span className="text-xs min-w-0 truncate">{item.firstName} {item.lastName} · {item.email}</span>
                         <Badge variant={item.status === 'purchased' ? 'success' : 'warning'}>{item.status}</Badge>
                       </div>
                     ))}
@@ -1013,7 +1037,7 @@ const NutritionistDashboard = ({ session, onLogout }) => {
 
             <div className="grid lg:grid-cols-2 gap-4">
               <Card title="Notifiche" icon={<Bell size={16} />}>
-                <div className="space-y-2 max-h-56 overflow-auto">
+                <div className="space-y-2 max-h-none overflow-visible md:max-h-56 md:overflow-auto">
                   {data.notifications.length === 0 && <p className="text-sm text-slate-500">Nessuna notifica al momento.</p>}
                   {data.notifications.map((notification) => (
                     <button key={notification.id} className="w-full text-left border border-slate-200 rounded-xl p-3 bg-slate-50" onClick={() => { nutritionistApi.markNotificationRead(session, notification.id); refresh(); }}>
@@ -1026,7 +1050,7 @@ const NutritionistDashboard = ({ session, onLogout }) => {
               </Card>
 
               <Card title="Comunicazioni" icon={<Megaphone size={16} />}>
-                <div className="space-y-2 max-h-56 overflow-auto">
+                <div className="space-y-2 max-h-none overflow-visible md:max-h-56 md:overflow-auto">
                   {data.announcements.length === 0 && <p className="text-sm text-slate-500">Nessun avviso al momento.</p>}
                   {data.announcements.map((messageItem) => (
                     <article key={messageItem.id} className="border border-slate-200 rounded-xl p-3">

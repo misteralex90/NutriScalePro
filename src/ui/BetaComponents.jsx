@@ -150,12 +150,12 @@ export const BetaBanner = ({ tenantCreatedAt }) => {
 
   return (
     <div className="bg-gradient-to-r from-emerald-500 via-cyan-500 to-teal-500 rounded-2xl p-4 md:p-5 text-white shadow-xl shadow-cyan-200/30 mo-card-enter">
-      <div className="flex items-start gap-4">
+      <div className="flex flex-col sm:flex-row items-start gap-4">
         <div className="shrink-0 w-12 h-12 rounded-xl bg-white/20 backdrop-blur flex items-center justify-center">
           <Sparkles size={24} className="text-white" />
         </div>
         <div className="flex-1">
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex flex-wrap items-center gap-2 mb-2">
             <h3 className="text-lg font-black">Benvenuto nella versione Beta!</h3>
             <BetaBadge />
           </div>
